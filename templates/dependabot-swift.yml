@@ -1,0 +1,30 @@
+# NOT RENDERED BY bootstrap.py — this is a reference snippet, not a template.
+#
+# A new Swift repository has no usable SPM manifest yet, and Dependabot cannot
+# read Swift package declarations out of an XcodeGen project.yml, so generating
+# a `swift` ecosystem entry at bootstrap time would create a permanently failing
+# updater. `--type swift` therefore renders dependabot-actions-only.yml instead.
+#
+# Once the repository has a root Package.swift (or another manifest Dependabot
+# supports), copy this file over .github/dependabot.yml to opt in deliberately.
+# Referenced from the README's `swift` section.
+
+version: 2
+# Keep dependencies and workflow actions current; surface advisories.
+updates:
+  - package-ecosystem: swift
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    # Group all SPM packages — they tend to be few and intentional, so a
+    # single batched PR is easier to review than one per package.
+    groups:
+      swift-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

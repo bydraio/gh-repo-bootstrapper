@@ -1,0 +1,79 @@
+name: test
+
+# Reusable Swift/Xcode test suite.
+# Called by ci.yml on PRs and by release-please.yml on pushes to main.
+on:
+  workflow_call:
+    inputs:
+      full:
+        description: >-
+          Run xcodebuild test (macos-26, billed at a 10x Linux-runner
+          multiplier). false runs only swift-format lint — used for ordinary
+          main pushes and, per-repo opt-in, for PRs too when the full suite's
+          macOS cost is disproportionate. release-please.yml passes true only
+          for the commit that is the Release Please PR merging.
+        type: boolean
+        default: true
+
+# The suite only needs to read the repository. Without this block the called
+# workflow inherits the caller's permissions, and a called workflow can only
+# ever narrow what it inherits, never widen it — so an explicit block here is
+# the only way to guarantee xcodebuild and any build-phase script it runs
+# never run with more than read, regardless of what a caller grants itself now
+# or in the future.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check formatting
+        run: xcrun swift-format lint --recursive --strict .
+      - name: Select destination
+        if: ${{ inputs.full }}
+        id: destination
+        env:
+          DESTINATION_KIND: __DESTINATION_KIND__
+        run: |
+          case "$DESTINATION_KIND" in
+            macos)
+              dest="platform=macOS,arch=arm64"
+              ;;
+            iphone|ipad)
+              device_type=$([ "$DESTINATION_KIND" = "iphone" ] && echo "iPhone" || echo "iPad")
+              udid=$(xcrun simctl list devices available --json \
+                | jq -r --arg t "$device_type" '[.devices[][] | select(.name | startswith($t))] | .[0].udid // empty')
+              if [ -z "$udid" ]; then
+                echo "error: no available $device_type simulator found" >&2
+                exit 1
+              fi
+              dest="platform=iOS Simulator,id=$udid"
+              ;;
+            *)
+              echo "error: unknown destination kind '$DESTINATION_KIND'" >&2
+              exit 1
+              ;;
+          esac
+          echo "destination=$dest" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - name: Run tests
+        if: ${{ inputs.full }}
+        env:
+          NSUnbufferedIO: YES
+          XCODE_SCHEME: __SCHEME_JSON__
+          DESTINATION: ${{ steps.destination.outputs.destination }}
+        run: |
+          xcodebuild test \
+            -scheme "$XCODE_SCHEME" \
+            -destination "$DESTINATION" \
+            -resultBundlePath TestResults
+        shell: bash
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ inputs.full && !cancelled() }}
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 7
+          if-no-files-found: ignore

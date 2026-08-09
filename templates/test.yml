@@ -1,0 +1,67 @@
+name: test
+
+# Reusable test suite (lint, format check, typecheck, unit tests, production
+# build, e2e). Called by ci.yml on PRs and by release-please.yml on pushes to
+# main, where it gates the release tag (and optional Vercel deploy).
+on:
+  workflow_call:
+    inputs:
+      full:
+        description: >-
+          Run the full suite including browser e2e. false runs only
+          build/lint/typecheck/unit — used for ordinary main pushes, which
+          release-please.yml re-tests only to gate its own PR update, not a
+          release. release-please.yml passes true only for the commit that is
+          actually the Release Please PR merging.
+        type: boolean
+        default: true
+
+# The suite only needs to read the repository. Release and deployment jobs
+# declare their own elevated permissions.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+# <<POSTGRES_BLOCK>>
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Fails closed if the production advisory baseline is malformed or if an
+      # audit finding is not documented in docs/advisory-baseline.md.
+      - run: npm run audit:production
+      # Fails closed if lint-baseline rows and inline suppressions do not match.
+      - run: npm run verify:baselines
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  # Browser e2e suite — kept as its own job so a browser flake never masks a
+  # lint/typecheck regression. Skipped for ordinary main pushes (see `full`
+  # above); always runs on PRs and on the Release Please PR merge.
+  e2e:
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

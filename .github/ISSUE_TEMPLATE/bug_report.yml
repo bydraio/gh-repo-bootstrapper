@@ -1,0 +1,141 @@
+name: Bug Report
+description: Report incorrect or broken behaviour in bootstrap.py or a generated repository
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A few things before you start:
+
+        - **Security issue?** Don't file it here — see [SECURITY.md](https://github.com/bydraio/gh-repo-bootstrapper/blob/main/SECURITY.md).
+        - **Please describe the problem in prose, not a patch or diff.** This
+          project doesn't take external code — see
+          [CONTRIBUTING.md](https://github.com/bydraio/gh-repo-bootstrapper/blob/main/CONTRIBUTING.md).
+          A clear description of what's wrong is more useful to us than a
+          suggested fix.
+        - **Please don't paste full generated files, `.env` contents, tokens,
+          or repo configuration.** File *paths* and *behaviour* are what we
+          need — not the file contents.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues and this isn't a duplicate
+          required: true
+        - label: This is not a security report (see SECURITY.md)
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually happened instead?
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: failure-location
+    attributes:
+      label: Where did it fail?
+      description: |
+        A bad bootstrapper-generated API call or configuration payload can
+        legitimately surface as a `gh`/GitHub API error — so "it's just a
+        gh/API failure" isn't a reason to rule this out on its own.
+      options:
+        - Generated files/templates (wrong content after running)
+        - Repository configuration or API call bootstrap.py made
+        - Unknown / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Include the command you ran. **Redact anything sensitive** — org
+        names are usually fine, but drop tokens, real repo names you don't
+        want public, or anything from `--secret`/env prompts.
+      placeholder: |
+        1. ./bootstrap.py --name my-app --type swift --scheme MyApp --org acme --dry-run
+        2. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: repo-type
+    attributes:
+      label: Repository type
+      options:
+        - nextjs
+        - python
+        - swift
+        - simple
+        - Not applicable / not generation-related
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: options
+    attributes:
+      label: Options in play (check any that apply)
+      options:
+        - label: "--private"
+        - label: Postgres block
+        - label: Vercel deploy
+        - label: XcodeGen (Swift)
+        - label: "--configure-only"
+        - label: "--dry-run"
+        - label: "--non-interactive"
+
+  - type: input
+    id: version
+    attributes:
+      label: bootstrap.py version or commit
+      description: A release tag, or `git rev-parse HEAD` if running from a checkout
+      placeholder: v0.2.0 or 4719573
+    validations:
+      required: true
+
+  - type: input
+    id: affected-paths
+    attributes:
+      label: Affected generated file(s)
+      description: Paths only (e.g. `release-please-config.json`, `.github/workflows/test-swift.yml`) — not their contents
+      placeholder: release-please-config.json
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.1
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.13.1"
+    validations:
+      required: true
+
+  - type: input
+    id: gh-version
+    attributes:
+      label: gh CLI version
+      placeholder: gh version 2.97.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Error messages, relevant log lines, anything else — with secrets and full file contents left out.

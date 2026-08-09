@@ -1,0 +1,29 @@
+version: 2
+# Keep dependencies and workflow actions current; surface advisories.
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    # Hold core tooling at their current major — a major bump needs deliberate
+    # adoption, not an auto-merge.
+    ignore:
+      - dependency-name: ruff
+        update-types: ["version-update:semver-major"]
+      - dependency-name: mypy
+        update-types: ["version-update:semver-major"]
+      - dependency-name: pytest
+        update-types: ["version-update:semver-major"]
+    groups:
+      dev-dependencies:
+        patterns:
+          - ruff
+          - mypy
+          - pytest
+          - pytest-*
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

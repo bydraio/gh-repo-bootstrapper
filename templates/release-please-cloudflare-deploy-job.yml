@@ -1,0 +1,84 @@
+
+  # Runs only when the release PR is merged (a Release was created). The
+  # deploy/record steps below are further gated on
+  # vars.CLOUDFLARE_DEPLOY_ENABLED, so this job can be turned on or off with
+  # `gh variable set` alone — no workflow regeneration needed. Assumes a
+  # static-export Next.js build (`output: 'export'`) at ./out — see
+  # wrangler.jsonc. npm ci/npm run build are gated too, not just the deploy
+  # step: a freshly bootstrapped repo has no package.json yet (bootstrap.py
+  # doesn't own it — see ASSUMED_NPM_SCRIPTS), so running them unconditionally
+  # would fail every release while the toggle is still off.
+  # Requires: vars CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_DEPLOY_ENABLED; secret
+  # CLOUDFLARE_API_TOKEN.
+  cloudflare-deploy:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' }}
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Build static export
+        if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' }}
+        run: |
+          npm ci
+          npm run build
+      - name: Deploy to Cloudflare Workers (production)
+        if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' }}
+        id: deploy
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Smoke-test the deployment
+        if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' }}
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          # wrangler-action only sets deployment-url when it can resolve a
+          # workers.dev or matching custom-domain route (see wrangler.jsonc's
+          # routes comment) — a deploy with neither leaves this empty even
+          # though `wrangler deploy` itself succeeded. Treat that as its own
+          # failure with its own message, not a curl-to-nothing 000.
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "::error::wrangler-action reported no deployment URL — check workers_dev/routes in wrangler.jsonc"
+            exit 1
+          fi
+          echo "Deployed: $DEPLOY_URL"
+          # Tolerate 401/403 (Cloudflare Access or similar gating); fail on 5xx / unreachable.
+          code="$(curl -s -o /dev/null -w '%{http_code}' "$DEPLOY_URL/" || echo 000)"
+          echo "GET $DEPLOY_URL/ -> $code"
+          if [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
+            echo "::error::Smoke check failed (HTTP $code) — staged build is unhealthy"
+            exit 1
+          fi
+
+      - name: Record GitHub Deployment
+        if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.deployment-url }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          id="$(jq -nc --arg ref "$GITHUB_SHA" --arg tag "$TAG" \
+            '{ref:$ref,environment:"Production",production_environment:true,auto_merge:false,required_contexts:[],description:("Release "+$tag)}' \
+            | gh api "repos/$GITHUB_REPOSITORY/deployments" --method POST --input - --jq '.id')"
+          jq -nc --arg url "$DEPLOY_URL" --arg tag "$TAG" \
+            '{state:"success",environment:"Production",environment_url:$url,description:("Deployed "+$tag+" to Cloudflare Workers production")}' \
+            | gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" --method POST --input -
+
+      - name: Explain disabled deployment
+        if: ${{ vars.CLOUDFLARE_DEPLOY_ENABLED != 'true' }}
+        run: |
+          echo "::notice::Cloudflare Workers deployment is disabled (vars.CLOUDFLARE_DEPLOY_ENABLED is not 'true')."
+          echo "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, then run:"
+          echo "  gh variable set CLOUDFLARE_DEPLOY_ENABLED --body true"
+          echo "to enable production deploys on future releases."

@@ -1,0 +1,38 @@
+name: validate
+
+# Validates this repository's own bootstrap.py and template validator — not
+# to be confused with templates/ci.yml, templates/test*.yml, etc., which are
+# rendered into *generated* repositories and run there instead.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# This workflow installs from requirements-dev.txt and runs validate_templates.py
+# straight from the pull request's own tree — attacker-controlled code by design,
+# as in any CI. That is safe only while the token stays read-only. Fork PRs get a
+# read-only token automatically; declaring it makes the guarantee explicit and
+# covers same-repo branch PRs too. bootstrap.py applies GitHub's fork-PR
+# hardening API to private repos only, so once this repo is public that setting
+# is not available to reapply here.
+permissions:
+  contents: read
+
+# Rapid pushes to a PR should not queue obsolete validation runs. Matches the
+# generated ci.yml and pr-title-check.yml templates, which both do this already.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install validator dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - run: python -m py_compile bootstrap.py validate_templates.py
+      - run: python validate_templates.py

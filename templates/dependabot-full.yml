@@ -1,0 +1,38 @@
+version: 2
+# Keep dependencies and workflow actions current; surface advisories.
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    # Hold these at their current major — a major bump is a breaking change
+    # that needs deliberate adoption, not an auto-merge.
+    ignore:
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # react + react-dom + @types are version-locked peers — must bump together.
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      # Keep Next and its ESLint config in one update: the packages are pinned
+      # to the same framework version and must not drift apart.
+      next:
+        patterns:
+          - next
+          - eslint-config-next
+      dev-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

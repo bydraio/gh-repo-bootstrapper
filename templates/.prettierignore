@@ -1,0 +1,14 @@
+.next/
+node_modules/
+package-lock.json
+# Release Please manages this generated version manifest.
+.release-please-manifest.json
+public/
+*.md
+playwright-report/
+test-results/
+# OMC operational state — runtime artifacts, not source.
+.omc/
+
+# Serena MCP local project state — not source.
+.serena/

@@ -1,0 +1,10 @@
+{
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "package-name": "gh-repo-bootstrapper",
+      "initial-version": "0.1.0"
+    }
+  }
+}

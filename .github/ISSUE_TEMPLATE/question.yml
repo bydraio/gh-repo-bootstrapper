@@ -1,0 +1,32 @@
+name: Question
+description: Ask about usage or behaviour that the README doesn't answer
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security issue?** Don't file it here — see [SECURITY.md](https://github.com/bydraio/gh-repo-bootstrapper/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: checked
+    attributes:
+      label: What have you already checked?
+      description: README sections, docs/branch-protection-runbook.md, existing issues, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: stuck
+    attributes:
+      label: Where are you stuck?
+      description: What's unclear, or what result did you get that didn't match what you expected?
+    validations:
+      required: true

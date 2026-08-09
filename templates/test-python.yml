@@ -1,0 +1,68 @@
+name: test
+
+# Reusable Python test suite (lint, type check, unit tests).
+# Called by ci.yml on PRs and by release-please.yml on pushes to main.
+on:
+  workflow_call:
+    inputs:
+      full:
+        description: >-
+          Accepted for caller-contract parity with test.yml / test-swift.yml,
+          which use it to skip an expensive lane (Playwright e2e, xcodebuild
+          test) on ordinary main pushes. This suite has no such lane — ruff,
+          mypy and pytest all run in one ubuntu-latest job — so nothing is
+          gated on it and every run is the full suite. Do not delete it as
+          unused: release-please-gated.yml passes `full` to whichever test.yml
+          the repo type rendered, and an undeclared input fails the workflow at
+          parse time with "Invalid input, full is not defined in the referenced
+          workflow". validate_templates.py asserts this declaration stays.
+        type: boolean
+        default: true
+
+# The suite only needs to read the repository. Without this block the called
+# workflow inherits the caller's permissions, and a called workflow can only
+# ever narrow what it inherits, never widen it — so an explicit block here is
+# the only way to guarantee pip install and pytest never run with more than
+# read, regardless of what a caller grants itself now or in the future.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: |
+            **/requirements*.txt
+            pyproject.toml
+      - name: Install dependencies
+        run: |
+          if [ -f requirements-dev.txt ]; then
+            pip install -r requirements-dev.txt
+          elif [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          elif [ -f pyproject.toml ]; then
+            # Detect a PEP 621 `[project.optional-dependencies] dev = [...]`
+            # extra via tomllib (stdlib, requires Python 3.11+ — guaranteed by
+            # the generated .python-version pin) instead of parsing pip's
+            # error text, which isn't a stable API and (depending on pip
+            # version/resolver) can warn-and-succeed rather than fail outright
+            # for an undefined extra. Projects that declare dev dependencies
+            # via tool-specific metadata (e.g. Poetry's
+            # [tool.poetry.group.dev.dependencies]) aren't PEP 621
+            # optional-dependencies and won't be detected here — add a
+            # requirements-dev.txt to opt in to that dependency set instead.
+            if python3 -c "import sys, tomllib; extras = tomllib.load(open('pyproject.toml', 'rb')).get('project', {}).get('optional-dependencies', {}); sys.exit(0 if 'dev' in extras else 1)"; then
+              pip install -e ".[dev]"
+            else
+              pip install -e .
+            fi
+          fi
+          pip install ruff mypy pytest
+      - run: ruff check .
+      - run: mypy .
+      - run: pytest

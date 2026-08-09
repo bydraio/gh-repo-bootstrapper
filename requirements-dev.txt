@@ -1,0 +1,2 @@
+# Development-only dependency for validate_templates.py.
+PyYAML>=6,<7

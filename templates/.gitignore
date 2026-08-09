@@ -1,0 +1,81 @@
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# Secrets and local environment
+*.pem
+.env*
+# The documented template is intentionally committed.
+!.env.example
+
+# Logs
+*.log*
+
+# Node.js and package managers
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Next.js, build output, and generated type metadata
+.next/
+out/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+.wrangler/
+
+# Test output and caches
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+e2e/.cache/
+.lighthouseci/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Xcode and Swift
+xcuserdata/
+DerivedData/
+.xcschemes/
+.swiftpm/
+.build/
+*.xcworkspace/contents.xcworkspacedata
+*.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/xcshareddata/xcschemes/
+!*.xcodeproj/xcshareddata/xcschemes/*.xcscheme
+*.p12
+*.provisionprofile
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.dmg
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Local tooling state
+.omc/*
+!.omc/skills/
+.agents/
+.opencode/
+.serena/cache/
+.serena/project.local.yml
+.claude/settings.local.json

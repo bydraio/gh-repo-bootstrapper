@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --test *)",
+      "Bash(python3 validate_templates.py *)"
+    ]
+  }
+}

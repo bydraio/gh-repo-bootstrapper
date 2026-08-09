@@ -1,0 +1,23 @@
+name: ci
+
+# Runs the full test suite on every PR. Pushes to main are covered by
+# release-please.yml, which runs the same reusable suite before tagging +
+# deploying — so main pushes aren't re-tested here.
+on:
+  pull_request:
+
+# Calling a reusable workflow passes this job's permissions to it, which can
+# then only reduce them. Granting read here means no called suite can hold more
+# than read access no matter what it declares.
+permissions:
+  contents: read
+
+# Rapid PR updates should not queue obsolete full suites. Release Please keeps
+# its own queue because releases must run in order.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml

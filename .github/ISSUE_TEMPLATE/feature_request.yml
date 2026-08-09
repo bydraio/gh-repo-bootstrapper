@@ -1,0 +1,66 @@
+name: Feature Request
+description: Suggest a new capability, flag, or repo type for gh-repo-bootstrapper
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature ideas are genuinely wanted. Please describe the problem and
+        the behaviour you'd like — not a patch or diff. This project doesn't
+        take external code; see
+        [CONTRIBUTING.md](https://github.com/bydraio/gh-repo-bootstrapper/blob/main/CONTRIBUTING.md).
+        If this idea leads to a change, it'll be implemented independently
+        and credited in the release notes.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I searched existing issues and this isn't a duplicate
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do that the tool doesn't support today?
+      placeholder: |
+        Example: "When I generate a python repo, I'd like the option to also..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed behaviour
+      description: Describe what you'd like to happen, in prose — not code.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds considered
+      description: Anything you've tried instead, and why it falls short.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - New repository type
+        - New/changed template file
+        - New validator check
+        - New CLI flag
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, prior art from other tools, or anything else useful.
