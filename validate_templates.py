@@ -117,6 +117,7 @@ AGENTS_COMMON_REQUIREMENTS = (
     "Use connected documentation or research capabilities",
     "Use an installed skill only when it matches the task",
     "Do not send secrets, private source, or customer data to external services.",
+    "A successful screenshot-generation workflow means only that artifacts were produced; it is not visual approval.",
     "## Definition of done",
     "do not claim unrun checks passed.",
 )
