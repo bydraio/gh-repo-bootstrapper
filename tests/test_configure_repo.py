@@ -1,7 +1,8 @@
-"""Regression tests for the live settings applied to generated repositories."""
+"""Regression tests for provider-free generated repository configuration."""
 
 import json
 import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -9,101 +10,18 @@ import bootstrap
 
 
 class ConfigureRepoTests(unittest.TestCase):
-    def test_workflow_permissions_are_read_only_without_pr_approvals(self):
-        calls = []
-        config = {
-            "name": "example",
-            "owner": "octocat",
-            "repo_type": "simple",
-            "private": False,
-            "vercel": False,
-            "cloudflare": False,
-            "release_please_client_id": "",
-            "release_please_app_key": "",
-        }
-
-        def run(command, **kwargs):
-            calls.append((command, kwargs))
-            return subprocess.CompletedProcess(command, 0)
-
-        with patch.object(bootstrap.subprocess, "run", side_effect=run):
-            bootstrap.configure_repo(config)
-
-        workflow_call = next(
-            (command, kwargs)
-            for command, kwargs in calls
-            if command[2]
-            == "repos/octocat/example/actions/permissions/workflow"
-        )
-        payload = json.loads(workflow_call[1]["input"].decode())
-        self.assertEqual(
-            payload,
-            {
-                "default_workflow_permissions": "read",
-                "can_approve_pull_request_reviews": False,
-            },
-        )
-
-    def _base_vercel_config(self):
+    def _config(self):
         return {
             "name": "example",
             "owner": "octocat",
             "repo_type": "nextjs",
             "private": False,
-            "vercel": True,
-            "cloudflare": False,
-            "vercel_org_id": "org_123",
-            "vercel_project_id": "proj_123",
-            "vercel_deploy_enabled": "false",
-            "release_please_client_id": "",
-            "release_please_app_key": "",
+            "postgres": False,
+            "release_please_client_id": "client-id",
+            "release_please_app_key": "private-key",
         }
 
-    def test_vercel_deploy_enabled_var_is_initialized_when_absent(self):
-        calls = []
-
-        def run(command, **kwargs):
-            calls.append((command, kwargs))
-            if command[:3] == ["gh", "variable", "get"]:
-                # Simulate the variable not existing yet (first configure) —
-                # gh's actual not-found message, not just a bare failure.
-                return subprocess.CompletedProcess(
-                    command, 1, stderr=b"variable VERCEL_DEPLOY_ENABLED not found\n"
-                )
-            return subprocess.CompletedProcess(command, 0)
-
-        with patch.object(bootstrap.subprocess, "run", side_effect=run):
-            bootstrap.configure_repo(self._base_vercel_config())
-
-        var_set_calls = {
-            command[3]: kwargs["input"].decode()
-            for command, kwargs in calls
-            if command[:3] == ["gh", "variable", "set"]
-        }
-        self.assertEqual(var_set_calls.get("VERCEL_DEPLOY_ENABLED"), "false")
-
-    def test_vercel_deploy_enabled_var_is_not_initialized_on_transient_lookup_failure(self):
-        # A non-"not found" failure (auth expiry, rate limit, network blip)
-        # from `gh variable get` must not be treated the same as absence —
-        # doing so would risk the exact silent-revert this whole mechanism
-        # exists to prevent, just triggered by a flaky lookup instead of an
-        # unconditional write.
-        def run(command, **kwargs):
-            if command[:3] == ["gh", "variable", "get"]:
-                return subprocess.CompletedProcess(
-                    command, 1, stderr=b"HTTP 502: Bad Gateway\n"
-                )
-            return subprocess.CompletedProcess(command, 0)
-
-        with patch.object(bootstrap.subprocess, "run", side_effect=run):
-            with self.assertRaises(subprocess.CalledProcessError):
-                bootstrap.configure_repo(self._base_vercel_config())
-
-    def test_vercel_deploy_enabled_var_is_not_overwritten_when_already_set(self):
-        # configure_repo() runs on every --configure-only re-run, not just
-        # initial creation. If VERCEL_DEPLOY_ENABLED already exists, an
-        # operator may have flipped it to "true" by hand — a re-run must not
-        # silently revert that back to gather_config's always-"false" value.
+    def test_configure_repo_writes_only_release_please_credentials(self):
         calls = []
 
         def run(command, **kwargs):
@@ -111,65 +29,18 @@ class ConfigureRepoTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0)
 
         with patch.object(bootstrap.subprocess, "run", side_effect=run):
-            bootstrap.configure_repo(self._base_vercel_config())
+            bootstrap.configure_repo(self._config())
 
-        var_set_calls = {
-            command[3]
-            for command, _kwargs in calls
-            if command[:3] == ["gh", "variable", "set"]
-        }
-        self.assertNotIn("VERCEL_DEPLOY_ENABLED", var_set_calls)
-        # The other Vercel variables are still written on every re-run.
-        self.assertIn("VERCEL_ORG_ID", var_set_calls)
-        self.assertIn("VERCEL_PROJECT_ID", var_set_calls)
+        variable_names = [
+            command[3] for command, _kwargs in calls if command[:3] == ["gh", "variable", "set"]
+        ]
+        secret_names = [
+            command[3] for command, _kwargs in calls if command[:3] == ["gh", "secret", "set"]
+        ]
+        self.assertEqual(variable_names, ["RELEASE_PLEASE_CLIENT_ID"])
+        self.assertEqual(secret_names, ["RELEASE_PLEASE_APP_KEY"])
 
-    def _base_cloudflare_config(self):
-        return {
-            "name": "example",
-            "owner": "octocat",
-            "repo_type": "nextjs",
-            "private": False,
-            "vercel": False,
-            "cloudflare": True,
-            "cloudflare_account_id": "acct_123",
-            "cloudflare_deploy_enabled": "false",
-            "cloudflare_api_token": "cf_token_123",
-            "release_please_client_id": "",
-            "release_please_app_key": "",
-        }
-
-    def test_cloudflare_vars_and_secret_are_set_when_enabled(self):
-        calls = []
-
-        def run(command, **kwargs):
-            calls.append((command, kwargs))
-            if command[:3] == ["gh", "variable", "get"]:
-                # Simulate the variable not existing yet (first configure) —
-                # gh's actual not-found message, not just a bare failure.
-                return subprocess.CompletedProcess(
-                    command, 1, stderr=b"variable CLOUDFLARE_DEPLOY_ENABLED not found\n"
-                )
-            return subprocess.CompletedProcess(command, 0)
-
-        with patch.object(bootstrap.subprocess, "run", side_effect=run):
-            bootstrap.configure_repo(self._base_cloudflare_config())
-
-        var_set_calls = {
-            command[3]: kwargs["input"].decode()
-            for command, kwargs in calls
-            if command[:3] == ["gh", "variable", "set"]
-        }
-        secret_set_calls = {
-            command[3]: kwargs["input"].decode()
-            for command, kwargs in calls
-            if command[:3] == ["gh", "secret", "set"]
-        }
-        self.assertEqual(var_set_calls.get("CLOUDFLARE_ACCOUNT_ID"), "acct_123")
-        self.assertEqual(var_set_calls.get("CLOUDFLARE_DEPLOY_ENABLED"), "false")
-        self.assertEqual(secret_set_calls.get("CLOUDFLARE_API_TOKEN"), "cf_token_123")
-        self.assertNotIn("VERCEL_ORG_ID", var_set_calls)
-
-    def test_cloudflare_deploy_enabled_var_is_not_overwritten_when_already_set(self):
+    def test_selected_actions_excludes_provider_actions(self):
         calls = []
 
         def run(command, **kwargs):
@@ -177,51 +48,51 @@ class ConfigureRepoTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 0)
 
         with patch.object(bootstrap.subprocess, "run", side_effect=run):
-            bootstrap.configure_repo(self._base_cloudflare_config())
+            bootstrap.configure_repo(self._config())
 
-        var_set_calls = {
-            command[3]
-            for command, _kwargs in calls
-            if command[:3] == ["gh", "variable", "set"]
-        }
-        self.assertNotIn("CLOUDFLARE_DEPLOY_ENABLED", var_set_calls)
-        self.assertIn("CLOUDFLARE_ACCOUNT_ID", var_set_calls)
-
-    def _selected_actions_payload(self, calls):
-        call = next(
+        command, kwargs = next(
             (command, kwargs)
             for command, kwargs in calls
             if command[2] == "repos/octocat/example/actions/permissions/selected-actions"
         )
-        return json.loads(call[1]["input"].decode())
+        payload = json.loads(kwargs["input"].decode())
+        self.assertEqual(payload["patterns_allowed"], ["amannn/action-semantic-pull-request@*"])
 
-    def test_wrangler_action_is_always_allowlisted(self):
-        # Always applied regardless of cfg["cloudflare"] — this same PUT call
-        # also runs on --configure-only, which re-derives cfg from
-        # gather_config and could silently drop a conditional pattern on any
-        # re-configure that doesn't pass --cloudflare again.
-        calls = []
-        config = {
-            "name": "example",
-            "owner": "octocat",
-            "repo_type": "simple",
-            "private": False,
-            "vercel": False,
-            "cloudflare": False,
-            "release_please_client_id": "",
-            "release_please_app_key": "",
-        }
+    def test_nextjs_render_is_provider_free_and_preserves_postgres(self):
+        files = bootstrap.generate_files({**self._config(), "name": "sample", "postgres": True})
+        rendered = "\n".join(files.values()).lower()
+        self.assertNotIn("vercel", rendered)
+        self.assertNotIn("cloudflare", rendered)
+        self.assertNotIn("wrangler", rendered)
+        self.assertNotIn("wrangler.jsonc", files)
+        self.assertIn("postgres", files[".github/workflows/test.yml"].lower())
+        self.assertNotIn("deployments: write", files[".github/workflows/release-please.yml"])
 
-        def run(command, **kwargs):
-            calls.append((command, kwargs))
-            return subprocess.CompletedProcess(command, 0)
+    def test_gather_config_has_no_provider_keys(self):
+        with patch.object(
+            sys,
+            "argv",
+            [
+                "bootstrap.py",
+                "--name",
+                "sample",
+                "--type",
+                "nextjs",
+                "--org",
+                "octocat",
+                "--non-interactive",
+                "--dry-run",
+            ],
+        ):
+            config = bootstrap.gather_config(bootstrap.parse_args())
 
-        with patch.object(bootstrap.subprocess, "run", side_effect=run):
-            bootstrap.configure_repo(config)
+        self.assertFalse({"vercel", "cloudflare", "vercel_token", "cloudflare_api_token"} & config.keys())
 
-        payload = self._selected_actions_payload(calls)
-        self.assertIn("cloudflare/wrangler-action@*", payload["patterns_allowed"])
-        self.assertIn("amannn/action-semantic-pull-request@*", payload["patterns_allowed"])
+    def test_retired_provider_flags_are_rejected(self):
+        with patch.object(sys, "argv", ["bootstrap.py", "--vercel"]):
+            with self.assertRaises(SystemExit) as error:
+                bootstrap.parse_args()
+        self.assertEqual(error.exception.code, 2)
 
 
 if __name__ == "__main__":

@@ -29,8 +29,6 @@ dist/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
-.vercel/
-.wrangler/
 
 # Test output and caches
 playwright-report/

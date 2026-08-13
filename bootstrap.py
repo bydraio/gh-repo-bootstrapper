@@ -4,8 +4,7 @@ bootstrap.py — Create a standardised GitHub repository.
 
 Supported types:
   nextjs   Full CI (lint / typecheck / tests / Playwright e2e) with optional
-           Vercel and/or Cloudflare Workers production deployment and
-           optional PostgreSQL test service.
+           PostgreSQL test service.
   python   Python CI (ruff / mypy / pytest) with gated Release Please.
   swift    Swift/Xcode CI (xcodebuild test) with gated Release Please.
   simple   Release Please only — no test workflows.
@@ -154,7 +153,7 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Types:
-              nextjs   Full CI + optional Vercel/Cloudflare deploy + optional PostgreSQL tests
+              nextjs   Full CI + optional PostgreSQL tests
               python   Python CI (ruff / mypy / pytest) + gated Release Please
               swift    Swift/Xcode CI (xcodebuild test) + gated Release Please
               simple   Release Please only (no tests)
@@ -165,8 +164,7 @@ def parse_args():
               ./bootstrap.py --name my-tool --type python --org my-org
               ./bootstrap.py --name my-app --type swift --scheme MyApp
               ./bootstrap.py --name my-app --type swift --scheme MyApp --xcodegen
-              ./bootstrap.py --name my-app --type nextjs --no-vercel --dry-run
-              ./bootstrap.py --name my-app --type nextjs --cloudflare --dry-run
+              ./bootstrap.py --name my-app --type nextjs --postgres --dry-run
               ./bootstrap.py --name my-app --type nextjs --configure-only
         """),
     )
@@ -180,16 +178,6 @@ def parse_args():
                      help="Make repository private (default)")
     vis.add_argument("--public", action="store_true",
                      help="Make repository public")
-    vercel_grp = p.add_mutually_exclusive_group()
-    vercel_grp.add_argument("--vercel", action="store_true",
-                            help="Include Vercel deployment (nextjs only)")
-    vercel_grp.add_argument("--no-vercel", action="store_true",
-                            help="Skip Vercel deployment (nextjs only)")
-    cloudflare_grp = p.add_mutually_exclusive_group()
-    cloudflare_grp.add_argument("--cloudflare", action="store_true",
-                                help="Include Cloudflare Workers deployment (nextjs only)")
-    cloudflare_grp.add_argument("--no-cloudflare", action="store_true",
-                                help="Skip Cloudflare Workers deployment (nextjs only)")
     p.add_argument("--postgres", action="store_true",
                    help="Add PostgreSQL 16 service to test workflow (nextjs only)")
     p.add_argument("--scheme",
@@ -425,8 +413,6 @@ def gather_config(args) -> dict:
         private = not prompt_yn("\nMake repository public?", default=False)
 
     # --- type-specific options ---
-    vercel = False
-    cloudflare = False
     postgres = False
     scheme = ""
     destination = ""
@@ -440,32 +426,12 @@ def gather_config(args) -> dict:
             print("warning: --destination is only used with --type swift; ignoring")
         if args.xcodegen:
             print("warning: --xcodegen is only used with --type swift; ignoring")
-        if args.no_vercel:
-            vercel = False
-        elif args.vercel:
-            vercel = True
-        elif ni:
-            vercel = False  # safe default; use --vercel to enable in non-interactive mode
-        else:
-            vercel = prompt_yn("\nInclude Vercel deployment?", default=False)
-        if args.no_cloudflare:
-            cloudflare = False
-        elif args.cloudflare:
-            cloudflare = True
-        elif ni:
-            cloudflare = False  # safe default; use --cloudflare to enable in non-interactive mode
-        else:
-            cloudflare = prompt_yn("Include Cloudflare Workers deployment?", default=False)
         if not ni and not args.postgres:
             postgres = prompt_yn("Include PostgreSQL service in tests?", default=False)
 
     elif repo_type == "swift":
         if args.postgres:
             print("warning: --postgres is only used with --type nextjs; ignoring")
-        if args.vercel or args.no_vercel:
-            print("warning: --vercel/--no-vercel is only used with --type nextjs; ignoring")
-        if args.cloudflare or args.no_cloudflare:
-            print("warning: --cloudflare/--no-cloudflare is only used with --type nextjs; ignoring")
         scheme = args.scheme or ""
         if not scheme:
             if ni:
@@ -487,10 +453,6 @@ def gather_config(args) -> dict:
     else:  # python, simple
         if args.postgres:
             print("warning: --postgres is only used with --type nextjs; ignoring")
-        if args.vercel or args.no_vercel:
-            print("warning: --vercel/--no-vercel is only used with --type nextjs; ignoring")
-        if args.cloudflare or args.no_cloudflare:
-            print("warning: --cloudflare/--no-cloudflare is only used with --type nextjs; ignoring")
         if args.scheme:
             print("warning: --scheme is only used with --type swift; ignoring")
         if args.destination:
@@ -502,38 +464,16 @@ def gather_config(args) -> dict:
     # Non-interactive: read from environment variables.
     # Interactive: prompt the user (skipped entirely in dry-run).
     release_please_client_id = ""
-    vercel_org_id = ""
-    vercel_project_id = ""
     release_please_app_key = ""
-    vercel_token = ""
-    cloudflare_account_id = ""
-    cloudflare_api_token = ""
 
     if ni:
         release_please_client_id = os.environ.get("RELEASE_PLEASE_CLIENT_ID", "")
         release_please_app_key = os.environ.get("RELEASE_PLEASE_APP_KEY", "")
-        if vercel:
-            vercel_org_id = os.environ.get("VERCEL_ORG_ID", "")
-            vercel_project_id = os.environ.get("VERCEL_PROJECT_ID", "")
-            vercel_token = os.environ.get("VERCEL_TOKEN", "")
-        if cloudflare:
-            cloudflare_account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
-            cloudflare_api_token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
     elif not dry:
         print("\nGitHub App — Release Please:")
         release_please_client_id = prompt_optional("RELEASE_PLEASE_CLIENT_ID")
         release_please_app_key = prompt_optional("RELEASE_PLEASE_APP_KEY", secret=True)
 
-        if vercel:
-            print("\nVercel project:")
-            vercel_org_id = prompt_optional("VERCEL_ORG_ID")
-            vercel_project_id = prompt_optional("VERCEL_PROJECT_ID")
-            vercel_token = prompt_optional("VERCEL_TOKEN", secret=True)
-
-        if cloudflare:
-            print("\nCloudflare Workers project:")
-            cloudflare_account_id = prompt_optional("CLOUDFLARE_ACCOUNT_ID")
-            cloudflare_api_token = prompt_optional("CLOUDFLARE_API_TOKEN", secret=True)
 
     return {
         "name": name,
@@ -541,27 +481,13 @@ def gather_config(args) -> dict:
         "repo_type": repo_type,
         "owner": owner,
         "private": private,
-        "vercel": vercel,
-        # Always "false" at bootstrap time, even when --vercel is passed:
-        # half-configured deployment (job present, secrets missing) is worse
-        # than a deliberately-off toggle the repo owner flips on once
-        # VERCEL_ORG_ID/VERCEL_PROJECT_ID/VERCEL_TOKEN are actually in place.
-        "vercel_deploy_enabled": "false",
-        "cloudflare": cloudflare,
-        # Same reasoning and same "not left open" ruling as vercel_deploy_enabled.
-        "cloudflare_deploy_enabled": "false",
         "postgres": postgres,
         "scheme": scheme,
         "destination": destination,
         "xcodegen": xcodegen,
         "configure_only": configure_only,
         "release_please_client_id": release_please_client_id,
-        "vercel_org_id": vercel_org_id,
-        "vercel_project_id": vercel_project_id,
         "release_please_app_key": release_please_app_key,
-        "vercel_token": vercel_token,
-        "cloudflare_account_id": cloudflare_account_id,
-        "cloudflare_api_token": cloudflare_api_token,
         "dry_run": dry,
     }
 
@@ -654,8 +580,6 @@ _DESTINATION_EXAMPLES = {
 def generate_files(cfg: dict) -> dict:
     name = cfg["name"]
     repo_type = cfg["repo_type"]
-    vercel = cfg["vercel"]
-    cloudflare = cfg["cloudflare"]
     postgres = cfg["postgres"]
     destination = cfg.get("destination") or "iphone"
     xcodegen = bool(cfg.get("xcodegen"))
@@ -675,17 +599,7 @@ def generate_files(cfg: dict) -> dict:
     files[README] = readme
 
     if repo_type == "nextjs":
-        deploy = _load("release-please-deploy-job.yml") if vercel else ""
-        cloudflare_deploy = _load("release-please-cloudflare-deploy-job.yml") if cloudflare else ""
-        release_please_workflow = _compose(
-            _load("release-please-nextjs.yml"), "DEPLOY_JOB", deploy
-        )
-        release_please_workflow = _compose(
-            release_please_workflow, "CLOUDFLARE_DEPLOY_JOB", cloudflare_deploy
-        )
-        files[".github/workflows/release-please.yml"] = release_please_workflow
-        if cloudflare:
-            files["wrangler.jsonc"] = _load("wrangler.jsonc").replace("__REPOSITORY_NAME__", name)
+        files[".github/workflows/release-please.yml"] = _load("release-please-nextjs.yml")
         files[".github/workflows/ci.yml"] = _load("ci.yml")
         pg = _load("test-postgres-block.yml") if postgres else ""
         files[".github/workflows/test.yml"] = _compose(
@@ -787,10 +701,7 @@ def print_dry_run(cfg: dict, files: dict):
     print(f"  DRY RUN — {cfg['owner']}/{cfg['name']} ({cfg['repo_type']}, {vis})")
     print(f"  Local path: {cfg['repo_dir']}/")
     if cfg["repo_type"] == "nextjs":
-        print(
-            f"  Vercel: {cfg['vercel']}  |  Cloudflare: {cfg['cloudflare']}  |  "
-            f"Postgres: {cfg['postgres']}"
-        )
+        print(f"  Postgres: {cfg['postgres']}")
     elif cfg["repo_type"] == "swift":
         print(
             f"  Scheme: {cfg.get('scheme', '')}  |  "
@@ -809,20 +720,9 @@ def print_dry_run(cfg: dict, files: dict):
 
     print("GitHub variables to configure:")
     print("  RELEASE_PLEASE_CLIENT_ID")
-    if cfg["vercel"]:
-        print("  VERCEL_ORG_ID")
-        print("  VERCEL_PROJECT_ID")
-        print("  VERCEL_DEPLOY_ENABLED (set to \"false\" — flip to \"true\" once configured)")
-    if cfg["cloudflare"]:
-        print("  CLOUDFLARE_ACCOUNT_ID")
-        print("  CLOUDFLARE_DEPLOY_ENABLED (set to \"false\" — flip to \"true\" once configured)")
 
     print("\nGitHub secrets to configure:")
     print("  RELEASE_PLEASE_APP_KEY")
-    if cfg["vercel"]:
-        print("  VERCEL_TOKEN")
-    if cfg["cloudflare"]:
-        print("  CLOUDFLARE_API_TOKEN")
 
 
 # ---------------------------------------------------------------------------
@@ -896,38 +796,6 @@ def configure_repo(cfg: dict):
                 check=True,
             )
 
-    def set_var_if_absent(key: str, value: str) -> bool:
-        # Used only for *_DEPLOY_ENABLED: gather_config always feeds these
-        # "false" (never an operator's real intent — see the ruling in
-        # gather_config), and this function runs on every --configure-only
-        # re-run, not just initial creation. An unconditional set_var() would
-        # silently revert an operator's `gh variable set ... --body true`
-        # back to "false" on the next reconfigure. Only initialize the
-        # variable if it doesn't exist yet; once it does, only the operator
-        # touches it again. Returns whether it actually initialized the
-        # variable, so the caller can tell "just set to false" (worth
-        # telling the operator) apart from "already existed, left alone"
-        # (state unknown from here — print_success must not guess it).
-        result = subprocess.run(
-            ["gh", "variable", "get", key, "--repo", repo],
-            capture_output=True,
-        )
-        if result.returncode == 0:
-            return False
-        # A non-zero exit here is ambiguous: "not found" (the expected,
-        # safe-to-initialize case) and a transient auth/network/API failure
-        # both exit non-zero. Treating the latter as "absent" would silently
-        # revert an operator's real "true" the same way the unconditional
-        # set_var() this replaces did. Only proceed on an explicit not-found;
-        # anything else is a real failure the caller should see.
-        stderr_text = (result.stderr or b"").decode(errors="replace")
-        if "not found" not in stderr_text.lower():
-            raise subprocess.CalledProcessError(
-                result.returncode, result.args, result.stdout, result.stderr
-            )
-        set_var(key, value)
-        return True
-
     def api(method: str, endpoint: str, payload: dict, *, stderr=None):
         subprocess.run(
             ["gh", "api", endpoint, "--method", method, "--input", "-"],
@@ -941,22 +809,7 @@ def configure_repo(cfg: dict):
 
     # --- variables and secrets ---
     set_var("RELEASE_PLEASE_CLIENT_ID", cfg.get("release_please_client_id", ""))
-    if cfg["vercel"]:
-        set_var("VERCEL_ORG_ID", cfg.get("vercel_org_id", ""))
-        set_var("VERCEL_PROJECT_ID", cfg.get("vercel_project_id", ""))
-        cfg["vercel_deploy_enabled_initialized"] = set_var_if_absent(
-            "VERCEL_DEPLOY_ENABLED", cfg.get("vercel_deploy_enabled", "false")
-        )
-    if cfg["cloudflare"]:
-        set_var("CLOUDFLARE_ACCOUNT_ID", cfg.get("cloudflare_account_id", ""))
-        cfg["cloudflare_deploy_enabled_initialized"] = set_var_if_absent(
-            "CLOUDFLARE_DEPLOY_ENABLED", cfg.get("cloudflare_deploy_enabled", "false")
-        )
     set_secret("RELEASE_PLEASE_APP_KEY", cfg.get("release_please_app_key", ""))
-    if cfg["vercel"]:
-        set_secret("VERCEL_TOKEN", cfg.get("vercel_token", ""))
-    if cfg["cloudflare"]:
-        set_secret("CLOUDFLARE_API_TOKEN", cfg.get("cloudflare_api_token", ""))
 
     # --- merge strategy, PR branch updates, Projects ---
     # Squash-merge only: merge commits and rebase disabled so every squash
@@ -978,13 +831,6 @@ def configure_repo(cfg: dict):
     # Only GitHub-owned and Marketplace-verified actions, plus an explicit
     # allowlist for third-party actions this repo's own workflows depend on
     # (amannn/action-semantic-pull-request, used by pr-title-check.yml;
-    # cloudflare/wrangler-action, used by the generated cloudflare-deploy
-    # job). Always applied, not conditioned on cfg["cloudflare"]: this same
-    # PUT call also runs on the --configure-only path, which re-derives cfg
-    # from gather_config and would silently drop the pattern — and thus break
-    # a future release's deploy job — on any re-configure that doesn't
-    # happen to pass --cloudflare again. Allowlisting a pattern a repo's
-    # workflows never reference is inert, not a standing risk.
     # sha_pinning_required rejects any workflow run that references an
     # action by tag or branch rather than a full commit SHA;
     # validate_templates.py's check_sha_pinned_actions() enforces the same
@@ -1000,7 +846,6 @@ def configure_repo(cfg: dict):
         "verified_allowed": True,
         "patterns_allowed": [
             "amannn/action-semantic-pull-request@*",
-            "cloudflare/wrangler-action@*",
         ],
     })
     api("PUT", f"repos/{repo}/actions/permissions/workflow", {
@@ -1057,18 +902,6 @@ def print_success(cfg: dict):
         missing.append("RELEASE_PLEASE_CLIENT_ID (variable)")
     if not cfg.get("release_please_app_key"):
         missing.append("RELEASE_PLEASE_APP_KEY (secret)")
-    if cfg["vercel"]:
-        if not cfg.get("vercel_org_id"):
-            missing.append("VERCEL_ORG_ID (variable)")
-        if not cfg.get("vercel_project_id"):
-            missing.append("VERCEL_PROJECT_ID (variable)")
-        if not cfg.get("vercel_token"):
-            missing.append("VERCEL_TOKEN (secret)")
-    if cfg["cloudflare"]:
-        if not cfg.get("cloudflare_account_id"):
-            missing.append("CLOUDFLARE_ACCOUNT_ID (variable)")
-        if not cfg.get("cloudflare_api_token"):
-            missing.append("CLOUDFLARE_API_TOKEN (secret)")
     if cfg.get("branch_protection_failed"):
         if cfg.get("branch_protection_plan_limited"):
             missing.append("branch protection on main (requires GitHub Pro for private repos)")
@@ -1080,23 +913,6 @@ def print_success(cfg: dict):
         for item in missing:
             print(f"    {item}")
 
-    # Only printed when this run actually just initialized the variable to
-    # "false" (see set_var_if_absent) — cfg["vercel_deploy_enabled"] is always
-    # the literal string "false" from gather_config regardless of the
-    # variable's real state on GitHub, so it can't be used to decide this;
-    # a --configure-only re-run that found the variable already set (an
-    # operator may have already flipped it to "true") stays silent instead
-    # of printing a stale "off by default" claim.
-    if cfg["vercel"] and cfg.get("vercel_deploy_enabled_initialized"):
-        print("\n  Vercel deployment is off by default:")
-        print("    VERCEL_DEPLOY_ENABLED is \"false\" — once VERCEL_ORG_ID, "
-              "VERCEL_PROJECT_ID, and VERCEL_TOKEN are set, enable deploys with:")
-        print(f"    gh variable set VERCEL_DEPLOY_ENABLED --repo {owner}/{name} --body true")
-    if cfg["cloudflare"] and cfg.get("cloudflare_deploy_enabled_initialized"):
-        print("\n  Cloudflare Workers deployment is off by default:")
-        print("    CLOUDFLARE_DEPLOY_ENABLED is \"false\" — once CLOUDFLARE_ACCOUNT_ID and "
-              "CLOUDFLARE_API_TOKEN are set, enable deploys with:")
-        print(f"    gh variable set CLOUDFLARE_DEPLOY_ENABLED --repo {owner}/{name} --body true")
     print()
 
 
@@ -1121,10 +937,6 @@ def main():
         print(f"\nAbout to configure: {full} ({cfg['repo_type']})")
         print("  Enforces: squash-merge only, delete branch on merge, required status checks on main")
         print("  Note: file generation is skipped — commit CLAUDE.md and AGENTS.md separately if needed")
-        if cfg["repo_type"] == "nextjs":
-            print("  Note: this run's --vercel/--cloudflare flags (or prompt answers) decide whether "
-                  "their variables/secrets are (re-)applied this run — pass them explicitly to avoid "
-                  "relying on the interactive prompts' defaults")
         if not args.non_interactive:
             if not prompt_yn("\nProceed?", default=True):
                 print("Aborted.")
@@ -1149,10 +961,6 @@ def main():
     print(f"  Local path: {cfg['repo_dir']}/")
     if cfg["repo_type"] == "nextjs":
         extras = []
-        if cfg["vercel"]:
-            extras.append("Vercel deploy")
-        if cfg["cloudflare"]:
-            extras.append("Cloudflare Workers deploy")
         if cfg["postgres"]:
             extras.append("Postgres tests")
         if extras:
