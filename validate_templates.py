@@ -25,6 +25,9 @@ Checks performed on each generated file:
     must pin the operator-ruled configuration (strict False, enforce_admins
     True, a required PR with zero required approvals, no push restrictions)
     and contexts identical to required_status_checks(), for every repo type
+  - release-gated full-suite contract: rendered Python and Swift
+    release-please.yml callers must select the full suite for manual dispatch
+    and for the Release Please release commit
   - runbook presence: every generated repo carries
     docs/branch-protection-runbook.md with the load-bearing operational facts
 
@@ -57,6 +60,10 @@ import bootstrap
 MARKER_RE = re.compile(r"__[A-Z_]+__|# <<[A-Z_]+>>")
 NPM_SCRIPT_RE = re.compile(r"\bnpm\s+run\s+([A-Za-z0-9:_-]+)|\bnpm\s+test\b")
 COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+RELEASE_FULL_SUITE_EXPRESSION = (
+    "${{ github.event_name == 'workflow_dispatch' || "
+    "startsWith(github.event.head_commit.message, 'chore(main): release') }}"
+)
 
 OWN_WORKFLOWS_DIR = Path(__file__).parent / ".github" / "workflows"
 
@@ -435,6 +442,36 @@ def check_readme(label: str, cfg: dict, files: dict) -> list:
             if command not in readme:
                 errors.append(f"[{label}] Swift README.md is missing {command!r}")
     return errors
+
+
+def check_release_full_suite_contract(label: str, repo_type: str, files: dict) -> list:
+    """Keep the release-gated Python/Swift caller on the full-suite contract.
+
+    The reusable test workflows accept a boolean `full` input. A release
+    workflow that only checks the commit message silently turns manual
+    dispatch into the cheap path, so validate the rendered caller value rather
+    than only checking that the input exists.
+    """
+    if repo_type not in ("python", "swift"):
+        return []
+
+    path = ".github/workflows/release-please.yml"
+    source = files.get(path)
+    if source is None:
+        return [f"[{label}] missing {path} for release-gated {repo_type} output"]
+
+    try:
+        workflow = yaml.safe_load(source) or {}
+        full = workflow["jobs"]["test"]["with"]["full"]
+    except (KeyError, TypeError, yaml.YAMLError) as exc:
+        return [f"[{label}] {path} has no readable jobs.test.with.full contract — {exc}"]
+
+    if full != RELEASE_FULL_SUITE_EXPRESSION:
+        return [
+            f"[{label}] {path} jobs.test.with.full must be "
+            f"{RELEASE_FULL_SUITE_EXPRESSION!r}, got {full!r}"
+        ]
+    return []
 
 
 def _blocking_build_job_errors(label: str, build_job: dict) -> list:
@@ -1557,6 +1594,24 @@ def run_self_tests() -> list:
     if "| Test scheme | `Sample App` |" not in spaced_readme:
         errors.append("self-test 'spaced scheme' leaked shell quoting into prose")
 
+    # Case 37: both release-gated generated repository types must keep manual
+    # dispatch on the full suite, not only the Release Please merge commit.
+    release_only = "${{ startsWith(github.event.head_commit.message, 'chore(main): release') }}"
+    for repo_type in ("python", "swift"):
+        cfg = next(cfg for _, cfg in configurations() if cfg["repo_type"] == repo_type)
+        files = bootstrap.generate_files(dict(cfg))
+        mutated = dict(files)
+        mutated[".github/workflows/release-please.yml"] = files[
+            ".github/workflows/release-please.yml"
+        ].replace(RELEASE_FULL_SUITE_EXPRESSION, release_only, 1)
+        result = check_release_full_suite_contract(
+            f"self-test:{repo_type} release-only contract", repo_type, mutated
+        )
+        if not any("jobs.test.with.full must be" in e for e in result):
+            errors.append(
+                f"self-test '{repo_type} release-only contract' did not fail as expected: {result}"
+            )
+
     return errors
 
 
@@ -1577,6 +1632,7 @@ def main() -> int:
         all_errors += check_workflow_permissions(label, files)
         all_errors += check_sha_pinned_actions(label, files)
         all_errors += check_reusable_workflow_inputs(label, files)
+        all_errors += check_release_full_suite_contract(label, cfg["repo_type"], files)
         all_errors += check_release_please_config(label, cfg, files)
         all_errors += check_baseline_documents(label, cfg["repo_type"], files)
         all_errors += check_readme(label, cfg, files)

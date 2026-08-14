@@ -28,7 +28,7 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
     with:
-      full: "${{ startsWith(github.event.head_commit.message, 'chore(main): release') }}"
+      full: "${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore(main): release') }}"
 
   release-please:
     needs: test
