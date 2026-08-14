@@ -19,16 +19,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Full suite only for the commit that is the Release Please PR merging
-  # (its title/commit message is the fixed "chore(main): release X.Y.Z"
-  # pattern release-please always uses). Every other push to main — an
-  # ordinary feature/Dependabot merge — already passed this same suite at
-  # PR time, so it gets the fast path only; it ships nothing and this run
-  # gates nothing real.
+  # Full suite runs for either manual dispatch or the commit that is the
+  # Release Please PR merging (its title/commit message is the fixed
+  # "chore(main): release X.Y.Z" pattern release-please always uses). Every
+  # other push to main — an ordinary feature/Dependabot merge — already
+  # passed this same suite at PR time, so it gets the fast path only; it ships
+  # nothing and this run gates nothing real.
   test:
     uses: ./.github/workflows/test.yml
     with:
-      full: "${{ startsWith(github.event.head_commit.message, 'chore(main): release') }}"
+      full: "${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore(main): release') }}"
 
   release-please:
     needs: test
