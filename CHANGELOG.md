@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/bydraio/gh-repo-bootstrapper/compare/v0.2.0...v0.3.0) (2026-08-14)
+
+
+### Features
+
+* generate screenshot review guidance ([f33cdb6](https://github.com/bydraio/gh-repo-bootstrapper/commit/f33cdb6de0ebbaba18f96de52a7a72fe14d90c9b))
+
 ## [0.2.0](https://github.com/bydraio/gh-repo-bootstrapper/compare/v0.1.0...v0.2.0) (2026-08-14)
 
 
