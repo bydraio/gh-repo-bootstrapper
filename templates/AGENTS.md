@@ -126,3 +126,11 @@ the checks run and any validation that could not be completed; do not claim
 unrun checks passed.
 # <<BASELINE_PROCESS>>
 # <<TYPE_TOOLING>>
+
+## Screenshot review
+
+Screenshot guidance is capability-conditional: do not assume browser or native
+capture tooling exists in this repository. A successful screenshot-generation
+workflow proves capture only; it does not approve visual fidelity or privacy.
+
+# <<SCREENSHOT_GUIDANCE>>

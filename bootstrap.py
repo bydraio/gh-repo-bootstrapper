@@ -76,6 +76,7 @@ NEXTJS_BASELINE_SCRIPTS = (
     "scripts/review-baselines.test.mjs",
 )
 NEXTJS_BASELINE_REVIEW_WORKFLOW = ".github/workflows/baseline-review.yml"
+SCREENSHOT_REVIEW = "docs/screenshot-review.md"
 README = "README.md"
 
 
@@ -616,12 +617,14 @@ def generate_files(cfg: dict) -> dict:
         files[NEXTJS_ENFORCED_AUDIT_SCRIPT] = _load("audit-production.mjs")
         for path in NEXTJS_BASELINE_SCRIPTS:
             files[path] = _load(path.removeprefix("scripts/"))
+        screenshot_guidance = _load("docs-screenshot-review-nextjs.md")
     elif repo_type == "python":
         files[".github/workflows/release-please.yml"] = _load("release-please-gated.yml")
         files[".github/workflows/ci.yml"] = _load("ci.yml")
         files[".github/workflows/test.yml"] = _load("test-python.yml")
         files[".github/dependabot.yml"] = _load("dependabot-python.yml")
         files[".python-version"] = _load(".python-version")
+        screenshot_guidance = ""
 
     elif repo_type == "swift":
         files[".github/workflows/release-please.yml"] = _load("release-please-gated.yml")
@@ -636,10 +639,19 @@ def generate_files(cfg: dict) -> dict:
         # Dependabot entry at this point creates a permanently failing updater.
         files[".github/dependabot.yml"] = _load("dependabot-actions-only.yml")
         files[".swift-format"] = _load(".swift-format")
+        screenshot_guidance = _load("docs-screenshot-review-swift.md")
 
     else:  # simple
         files[".github/workflows/release-please.yml"] = _load("release-please-simple.yml")
         files[".github/dependabot.yml"] = _load("dependabot-actions-only.yml")
+        screenshot_guidance = ""
+
+    if repo_type in ("nextjs", "swift"):
+        files[SCREENSHOT_REVIEW] = _compose(
+            _load("docs-screenshot-review-common.md"),
+            "PLATFORM_GUIDANCE",
+            screenshot_guidance,
+        )
 
     # Every generated repo is born with the runbook for the protection applied
     # below — all types get release-please, pr-title-check and required checks.
@@ -679,6 +691,11 @@ def generate_files(cfg: dict) -> dict:
     agents = _compose(agents, "TYPE_PREAMBLE", preamble)
     agents = _compose(agents, "BASELINE_PROCESS", baseline_guidance)
     agents = _compose(agents, "TYPE_TOOLING", tooling)
+    agents = _compose(
+        agents,
+        "SCREENSHOT_GUIDANCE",
+        _load(f"AGENTS-{repo_type}-screenshot-link.md") if repo_type in ("nextjs", "swift") else "",
+    )
     files["AGENTS.md"] = agents
     files[".gitignore"] = _load(".gitignore")
     if repo_type == "swift" and xcodegen:

@@ -44,6 +44,7 @@ Exit status is non-zero if any configuration or self-test fails any check.
 
 import itertools
 import json
+import posixpath
 import re
 import shlex
 import sys
@@ -125,9 +126,34 @@ AGENTS_COMMON_REQUIREMENTS = (
     "Use an installed skill only when it matches the task",
     "Do not send secrets, private source, or customer data to external services.",
     "A successful screenshot-generation workflow means only that artifacts were produced; it is not visual approval.",
+    "Screenshot guidance is capability-conditional",
+    "do not assume browser or native",
     "## Definition of done",
     "do not claim unrun checks passed.",
 )
+
+SCREENSHOT_HEADINGS = (
+    "# Screenshot review guidance",
+    "## Safety boundary",
+    "## Review workflow",
+)
+SCREENSHOT_PLATFORM_HEADINGS = {
+    "nextjs": "## Next.js/browser-capable projects",
+    "swift": "## Swift/native projects",
+}
+SCREENSHOT_PLATFORM_FORBIDDEN = {
+    "nextjs": ("xcodebuild", "swift-format", "simulator"),
+    "swift": ("playwright", "chromium", "npm run", "browser capture"),
+}
+SCREENSHOT_FORBIDDEN_INVENTED_TOOLING = (
+    "npm run screenshot",
+    "npm run screenshots",
+    "npx playwright",
+    "xcodebuild screenshot",
+    ".github/workflows/screenshots",
+)
+MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+.+$", re.MULTILINE)
 
 BRANCH_PROTECTION_RUNBOOK = "docs/branch-protection-runbook.md"
 
@@ -269,6 +295,94 @@ def check_agents_guidance(label: str, files: dict) -> list:
         for phrase in AGENTS_COMMON_REQUIREMENTS
         if phrase not in normalized_agents
     ]
+
+
+def _markdown_heading_errors(label: str, path: str, content: str) -> list:
+    errors = []
+    previous_level = 0
+    for match in MARKDOWN_HEADING_RE.finditer(content):
+        level = len(match.group(1))
+        if previous_level and level > previous_level + 1:
+            errors.append(
+                f"[{label}] {path} skips Markdown heading level "
+                f"{previous_level} -> {level}"
+            )
+        previous_level = level
+    return errors
+
+
+def _local_markdown_link_errors(label: str, path: str, content: str, files: dict) -> list:
+    errors = []
+    for raw_target in MARKDOWN_LINK_RE.findall(content):
+        target = raw_target.split(None, 1)[0].split("#", 1)[0]
+        if not target or target.startswith(("http://", "https://", "mailto:")):
+            continue
+        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), target))
+        if resolved not in files:
+            errors.append(
+                f"[{label}] {path} contains a broken local Markdown link "
+                f"{raw_target!r} (resolved as {resolved!r})"
+            )
+    return errors
+
+
+def check_screenshot_guidance(label: str, repo_type: str, files: dict) -> list:
+    """Validate the composed screenshot contract and its type boundaries."""
+    errors = []
+    document = files.get(bootstrap.SCREENSHOT_REVIEW)
+    agents = files.get("AGENTS.md", "")
+
+    if repo_type not in SCREENSHOT_PLATFORM_HEADINGS:
+        if document is not None:
+            errors.append(
+                f"[{label}] {bootstrap.SCREENSHOT_REVIEW} must not be generated for {repo_type}"
+            )
+        if "docs/screenshot-review.md" in agents:
+            errors.append(f"[{label}] {repo_type} AGENTS.md must not link screenshot guidance")
+        return errors
+
+    if document is None:
+        return [f"[{label}] missing {bootstrap.SCREENSHOT_REVIEW} for {repo_type}"]
+
+    for heading in SCREENSHOT_HEADINGS + (SCREENSHOT_PLATFORM_HEADINGS[repo_type],):
+        if heading not in document:
+            errors.append(f"[{label}] {bootstrap.SCREENSHOT_REVIEW} is missing heading {heading!r}")
+    errors += _markdown_heading_errors(label, bootstrap.SCREENSHOT_REVIEW, document)
+    errors += _local_markdown_link_errors(label, bootstrap.SCREENSHOT_REVIEW, document, files)
+
+    if SCREENSHOT_PLATFORM_HEADINGS[repo_type] not in document:
+        return errors
+
+    normalized_agents = " ".join(agents.split())
+    if "[docs/screenshot-review.md](docs/screenshot-review.md)" not in normalized_agents:
+        errors.append(f"[{label}] {repo_type} AGENTS.md is missing its screenshot guidance link")
+
+    lowered = document.lower()
+    for phrase in SCREENSHOT_FORBIDDEN_INVENTED_TOOLING:
+        if phrase.lower() in lowered:
+            errors.append(
+                f"[{label}] {bootstrap.SCREENSHOT_REVIEW} invents tooling or workflow {phrase!r}"
+            )
+
+    platform_heading = SCREENSHOT_PLATFORM_HEADINGS[repo_type]
+    platform_section = document.split(platform_heading, 1)[1].lower()
+    for phrase in SCREENSHOT_PLATFORM_FORBIDDEN[repo_type]:
+        if phrase.lower() in platform_section:
+            errors.append(
+                f"[{label}] {bootstrap.SCREENSHOT_REVIEW} leaks {phrase!r} into {repo_type} guidance"
+            )
+
+    for phrase in (
+        "does not create any of them",
+        "does not add capture dependencies",
+        "local or fictional fixture data",
+        "visual and privacy review",
+    ):
+        if phrase.lower() not in lowered:
+            errors.append(
+                f"[{label}] {bootstrap.SCREENSHOT_REVIEW} is missing truthful safety guidance {phrase!r}"
+            )
+    return errors
 
 
 def _template_npm_scripts(templates: dict) -> dict:
@@ -1094,6 +1208,68 @@ def run_self_tests() -> list:
             f"{result}"
         )
 
+    # Case 6b: screenshot guidance is composed only for browser-capable and
+    # native configurations, and each safety/structure guard fails closed when
+    # its source is mutated.
+    for repo_type in ("nextjs", "swift"):
+        cfg = next(cfg for _, cfg in configurations() if cfg["repo_type"] == repo_type)
+        files = bootstrap.generate_files(dict(cfg))
+        result = check_screenshot_guidance(f"self-test:{repo_type} screenshot guidance", repo_type, files)
+        if result:
+            errors.append(f"self-test '{repo_type} screenshot guidance' unexpectedly failed: {result}")
+
+        missing = dict(files)
+        del missing[bootstrap.SCREENSHOT_REVIEW]
+        result = check_screenshot_guidance(f"self-test:{repo_type} missing screenshot document", repo_type, missing)
+        if not any("missing docs/screenshot-review.md" in e for e in result):
+            errors.append(f"self-test '{repo_type} missing screenshot document' did not fail as expected: {result}")
+
+        heading = dict(files)
+        heading[bootstrap.SCREENSHOT_REVIEW] = files[bootstrap.SCREENSHOT_REVIEW].replace(
+            SCREENSHOT_PLATFORM_HEADINGS[repo_type], "## Platform guidance", 1
+        )
+        result = check_screenshot_guidance(f"self-test:{repo_type} heading drift", repo_type, heading)
+        if not any("missing heading" in e for e in result):
+            errors.append(f"self-test '{repo_type} heading drift' did not fail as expected: {result}")
+
+        broken_link = dict(files)
+        broken_link[bootstrap.SCREENSHOT_REVIEW] = files[bootstrap.SCREENSHOT_REVIEW].replace(
+            "../AGENTS.md", "../missing-AGENTS.md", 1
+        )
+        result = check_screenshot_guidance(f"self-test:{repo_type} broken screenshot link", repo_type, broken_link)
+        if not any("broken local Markdown link" in e for e in result):
+            errors.append(f"self-test '{repo_type} broken screenshot link' did not fail as expected: {result}")
+
+        marker = dict(files)
+        marker[bootstrap.SCREENSHOT_REVIEW] += "\n# <<PLATFORM_GUIDANCE>>\n"
+        result = check_markers(f"self-test:{repo_type} unreplaced screenshot marker", marker)
+        if not result:
+            errors.append(f"self-test '{repo_type} unreplaced screenshot marker' did not fail as expected")
+
+        platform_leak = dict(files)
+        leak = "xcodebuild" if repo_type == "nextjs" else "browser capture"
+        platform_leak[bootstrap.SCREENSHOT_REVIEW] += f"\n{leak}\n"
+        result = check_screenshot_guidance(f"self-test:{repo_type} platform separation", repo_type, platform_leak)
+        if not any("leaks" in e for e in result):
+            errors.append(f"self-test '{repo_type} platform separation' did not fail as expected: {result}")
+
+        invented = dict(files)
+        invented[bootstrap.SCREENSHOT_REVIEW] += "\nnpm run screenshots\n"
+        result = check_screenshot_guidance(f"self-test:{repo_type} invented tooling", repo_type, invented)
+        if not any("invents tooling" in e for e in result):
+            errors.append(f"self-test '{repo_type} invented tooling' did not fail as expected: {result}")
+
+    for repo_type in ("python", "simple"):
+        cfg = next(cfg for _, cfg in configurations() if cfg["repo_type"] == repo_type)
+        files = bootstrap.generate_files(dict(cfg))
+        result = check_screenshot_guidance(f"self-test:{repo_type} platform separation", repo_type, files)
+        if result:
+            errors.append(f"self-test '{repo_type} screenshot omission' unexpectedly failed: {result}")
+        files[bootstrap.SCREENSHOT_REVIEW] = "# Screenshot review guidance\n"
+        result = check_screenshot_guidance(f"self-test:{repo_type} unexpected screenshot document", repo_type, files)
+        if not any("must not be generated" in e for e in result):
+            errors.append(f"self-test '{repo_type} unexpected screenshot document' did not fail as expected: {result}")
+
     # Case 7: a Next.js configuration must carry both policy documents.
     result = check_baseline_documents("self-test:missing baseline", "nextjs", {})
     if not any("missing baseline document" in e for e in result):
@@ -1628,6 +1804,7 @@ def main() -> int:
         all_errors += check_nextjs_provider_free(label, cfg["repo_type"], files)
         all_errors += check_markers(label, files)
         all_errors += check_agents_guidance(label, files)
+        all_errors += check_screenshot_guidance(label, cfg["repo_type"], files)
         all_errors += check_workflow_job_consistency(label, cfg["repo_type"], files)
         all_errors += check_workflow_permissions(label, files)
         all_errors += check_sha_pinned_actions(label, files)
