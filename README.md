@@ -156,6 +156,7 @@ Full CI pipeline for Next.js applications.
 - `docs/lint-baseline.md` — policy and an empty table for our own inline lint/type suppressions
 - `docs/advisory-baseline.md` — policy and an empty table for accepted dependency advisories
 - `docs/branch-protection-runbook.md` — operational runbook for PRs blocked by required status checks
+- `docs/current-work.md` — forward-looking bootstrapper compatibility work
 - `scripts/baseline-table.mjs`, `scripts/verify-baselines.mjs`, and `scripts/audit-production.mjs` — shared parser plus fail-closed baseline and production-audit checkers
 - `scripts/*-baselines.test.mjs` — regression tests for the baseline verifier and scheduled review
 - `README.md` and `AGENTS.md` — project starter, quality-baseline pointers, and contribution guidance
