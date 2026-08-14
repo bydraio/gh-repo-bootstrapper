@@ -81,6 +81,10 @@ merge-ready:
   as its own commit subject and will truncate a long one mid-sentence in the
   rendered changelog. No `-`/`*` bullets, and don't repeat the title as an
   entry.
+- **CLI-authored bodies** — create multi-paragraph Markdown in a file passed to
+  `gh pr create` or `gh pr edit` with `--body-file`; a shell-quoted `\n` is
+  literal text. Before marking a standard PR ready, read it back with
+  `gh pr view <n> --json body --jq .body` and verify the paragraphs render.
 - **Squash merges** — ensure the final squash commit message retains all
   applicable `Co-Authored-By:` trailers. When using `gh pr merge --squash`, pass
   the trailers in the squash commit body via `--body`; do not pass an empty
