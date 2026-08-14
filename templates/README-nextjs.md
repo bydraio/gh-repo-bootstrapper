@@ -43,25 +43,10 @@ npm run test:e2e
 
 ## Deployment
 
-If Vercel and/or Cloudflare Workers deployment was enabled at bootstrap time
-(`--vercel` / `--cloudflare`), `release-please.yml` contains a matching
-`deploy` and/or `cloudflare-deploy` job that runs production builds after
-each release PR is merged — check that file's `jobs:` for which one(s) are
-present in this repo. Each present job is gated at runtime by its own
-`*_DEPLOY_ENABLED` GitHub variable — the job stays in the workflow file
-whether deployment is on or off, so turning it on or off later is
-`gh variable set`, not a regeneration:
-
-```sh
-gh variable set VERCEL_DEPLOY_ENABLED --body true
-gh variable set CLOUDFLARE_DEPLOY_ENABLED --body true
-```
-
-Cloudflare Workers deployment assumes a static-export Next.js build
-(`output: 'export'` in `next.config`, producing `./out`) and reads
-`wrangler.jsonc` for its Worker name and assets directory — see that file's
-comments for switching from the default `workers.dev` subdomain to a custom
-domain.
+Deployment is application-owned. The generated `release-please.yml` only tests
+and creates releases; add any provider-specific deployment workflow separately,
+preferably as a release-triggered workflow after the application and provider
+configuration have been reviewed.
 
 ## Quality baselines
 

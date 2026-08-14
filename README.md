@@ -1,8 +1,7 @@
 # gh-repo-bootstrapper
 
 Interactive Python script to create standardised GitHub repositories with
-pre-configured Actions workflows, Release Please, Dependabot, and (optionally)
-Vercel or Cloudflare Workers deployment.
+pre-configured Actions workflows, Release Please, and Dependabot.
 
 ## Requirements
 
@@ -97,8 +96,6 @@ confirm before creating anything.
 | `--type nextjs\|python\|swift\|simple` | Repository type |
 | `--org TEXT` | GitHub org or user (default: authenticated user) |
 | `--private` / `--public` | Visibility (default: private) |
-| `--vercel` / `--no-vercel` | Include or skip Vercel deployment (nextjs only, interactive default: skip) |
-| `--cloudflare` / `--no-cloudflare` | Include or skip Cloudflare Workers deployment (nextjs only, interactive default: skip) |
 | `--postgres` | Add PostgreSQL 16 service to test workflow (nextjs only) |
 | `--scheme TEXT` | Xcode scheme name for `xcodebuild test` (swift only) |
 | `--destination iphone\|ipad\|macos` | Target destination for `xcodebuild test` (swift only, default: iphone) |
@@ -116,11 +113,8 @@ confirm before creating anything.
 # Next.js app — preview files before creating
 ./bootstrap.py --name my-dashboard --type nextjs --dry-run
 
-# Next.js with PostgreSQL tests, no Vercel, in an org
-./bootstrap.py --name data-app --type nextjs --no-vercel --postgres --org my-org
-
-# Next.js deployed to Cloudflare Workers instead of Vercel
-./bootstrap.py --name my-site --type nextjs --no-vercel --cloudflare
+# Next.js with PostgreSQL tests in an org
+./bootstrap.py --name data-app --type nextjs --postgres --org my-org
 
 # Python library
 ./bootstrap.py --name my-tool --type python --public
@@ -153,7 +147,7 @@ highlight the additional files and README guidance for that type.
 Full CI pipeline for Next.js applications.
 
 - `pr-title-check.yml` — Conventional Commits validation on PR titles
-- `release-please.yml` — test → release-please → (optional) Vercel and/or Cloudflare Workers deploy pipeline
+- `release-please.yml` — test → release-please; deployment remains application-owned
 - `ci.yml` — runs the full test suite on every PR
 - `test.yml` — reusable suite: enforced production advisory audit and baseline verification, lint, format check, typecheck, unit tests, production build, Playwright e2e
 - `baseline-review.yml` — weekly, non-blocking summary of advisory review dates and Dependabot/document parity
@@ -168,8 +162,12 @@ Full CI pipeline for Next.js applications.
 
 Options:
 - `--postgres` — adds a PostgreSQL 16 service container to the build job
-- `--no-vercel` — omits the Vercel deploy job from `release-please.yml`
-- `--cloudflare` — adds a Cloudflare Workers deploy job (and `wrangler.jsonc`) to the repo
+
+`ci.yml` and `release-please.yml` use the canonical light-PR/full-release
+caller contract. `test.yml` is necessarily scaffold-general: it retains that
+`full` input and adds the optional PostgreSQL service, while each generated
+application supplies its own package scripts and any application-owned
+release-triggered deployment workflow.
 
 ### `python`
 
@@ -282,63 +280,12 @@ gh variable set RELEASE_PLEASE_CLIENT_ID --repo owner/name --body "<app-client-i
 gh secret set RELEASE_PLEASE_APP_KEY --repo owner/name
 ```
 
-## Vercel deployment (nextjs only)
+## Deployment migration
 
-When `--vercel` is passed (or chosen interactively), the `deploy` job is added
-to `release-please.yml`, but every step in it is further gated at runtime by
-the `VERCEL_DEPLOY_ENABLED` GitHub variable — the script initializes this to
-`"false"` the first time it configures the repo, regardless of `--vercel`, so
-a half-configured deploy (job present, secrets missing) can never fire. Once
-set, `--configure-only` re-runs never touch it again — flipping it by hand is
-the only way it changes after that. Three additional values are required
-before flipping it on:
-
-- `VERCEL_ORG_ID` — set as a GitHub variable
-- `VERCEL_PROJECT_ID` — set as a GitHub variable
-- `VERCEL_TOKEN` — set as a GitHub secret
-
-The script prompts for these interactively, or reads them from environment
-variables in `--non-interactive` mode:
-
-```sh
-gh variable set VERCEL_ORG_ID --repo owner/name --body "<org-id>"
-gh variable set VERCEL_PROJECT_ID --repo owner/name --body "<project-id>"
-gh secret set VERCEL_TOKEN --repo owner/name
-```
-
-Once those are in place, enable production deploys:
-
-```sh
-gh variable set VERCEL_DEPLOY_ENABLED --repo owner/name --body true
-```
-
-Flipping `VERCEL_DEPLOY_ENABLED` back to `false` later turns deployment off
-again without touching the workflow file — the `deploy` job stays in
-`release-please.yml`, its steps just no-op.
-
-## Cloudflare Workers deployment (nextjs only)
-
-When `--cloudflare` is passed (or chosen interactively), the
-`cloudflare-deploy` job is added to `release-please.yml` and a
-`wrangler.jsonc` is generated at the repo root, gated the same way as Vercel:
-`CLOUDFLARE_DEPLOY_ENABLED` always starts `"false"`, regardless of
-`--cloudflare`. Two additional values are required before flipping it on:
-
-- `CLOUDFLARE_ACCOUNT_ID` — set as a GitHub variable
-- `CLOUDFLARE_API_TOKEN` — set as a GitHub secret
-
-```sh
-gh variable set CLOUDFLARE_ACCOUNT_ID --repo owner/name --body "<account-id>"
-gh secret set CLOUDFLARE_API_TOKEN --repo owner/name
-gh variable set CLOUDFLARE_DEPLOY_ENABLED --repo owner/name --body true
-```
-
-This deploy path assumes a static-export Next.js build (`output: 'export'`)
-producing `./out` — the app scaffold owns `next.config`, so add that setting
-before enabling deploys. `wrangler.jsonc` defaults to a `workers.dev`
-subdomain so the pipeline's smoke test and recorded GitHub Deployment have a
-URL immediately; switch to a custom domain (`workers_dev: false` plus a
-`routes` entry) once one is ready — see the comments in that file.
+The previous provider-deployment flags are rejected as unknown options. The
+bootstrapper no longer generates or configures provider deployments. Add a
+reviewed, application-owned deployment workflow after choosing a provider; keep
+it separate from `release-please.yml`.
 
 ## Non-interactive mode
 
@@ -349,11 +296,6 @@ flags. Secrets and the Release Please key are read from environment variables:
 |---|---|
 | `RELEASE_PLEASE_CLIENT_ID` | always |
 | `RELEASE_PLEASE_APP_KEY` | always |
-| `VERCEL_ORG_ID` | nextjs + Vercel |
-| `VERCEL_PROJECT_ID` | nextjs + Vercel |
-| `VERCEL_TOKEN` | nextjs + Vercel |
-| `CLOUDFLARE_ACCOUNT_ID` | nextjs + Cloudflare |
-| `CLOUDFLARE_API_TOKEN` | nextjs + Cloudflare |
 
 Example (CI/CD usage):
 

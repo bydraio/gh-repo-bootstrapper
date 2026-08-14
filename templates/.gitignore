@@ -29,6 +29,7 @@ dist/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
+# Local caches from application-owned deployment tooling.
 .vercel/
 .wrangler/
 

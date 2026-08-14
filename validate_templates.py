@@ -149,16 +149,12 @@ RUNBOOK_REQUIRED_PHRASES = (
 
 def configurations():
     """Yield (label, cfg) for every supported bootstrap.py configuration."""
-    for vercel, cloudflare, postgres in itertools.product(
-        [False, True], [False, True], [False, True]
-    ):
+    for postgres in (False, True):
         yield (
-            f"nextjs vercel={vercel} cloudflare={cloudflare} postgres={postgres}",
+            f"nextjs postgres={postgres}",
             {
                 "name": "sample-app",
                 "repo_type": "nextjs",
-                "vercel": vercel,
-                "cloudflare": cloudflare,
                 "postgres": postgres,
                 "scheme": "",
                 "destination": "",
@@ -170,8 +166,6 @@ def configurations():
         {
             "name": "sample-lib",
             "repo_type": "python",
-            "vercel": False,
-            "cloudflare": False,
             "postgres": False,
             "scheme": "",
             "destination": "",
@@ -186,8 +180,6 @@ def configurations():
             {
                 "name": "sample-app",
                 "repo_type": "swift",
-                "vercel": False,
-                "cloudflare": False,
                 "postgres": False,
                 "scheme": "SampleApp",
                 "destination": destination,
@@ -200,26 +192,10 @@ def configurations():
         {
             "name": "sample-repo",
             "repo_type": "simple",
-            "vercel": False,
-            "cloudflare": False,
             "postgres": False,
             "scheme": "",
             "destination": "",
         },
-    )
-
-
-def _strip_jsonc_line_comments(content: str) -> str:
-    """Strip whole-line `//` comments so JSONC content can be json.loads'd.
-
-    Only handles comments on their own line (the style templates/wrangler.jsonc
-    actually uses) — not a general JSONC parser, and not meant to be one; a
-    trailing `// comment` after code on the same line would not be stripped
-    and would still fail to parse. Good enough to catch real syntax errors
-    (missing commas, unbalanced braces) without pulling in a dependency.
-    """
-    return "\n".join(
-        line for line in content.splitlines() if not line.strip().startswith("//")
     )
 
 
@@ -236,11 +212,33 @@ def check_syntax(label: str, files: dict) -> list:
                 json.loads(content)
             except json.JSONDecodeError as exc:
                 errors.append(f"[{label}] {path}: invalid JSON — {exc}")
-        elif path.endswith(".jsonc"):
-            try:
-                json.loads(_strip_jsonc_line_comments(content))
-            except json.JSONDecodeError as exc:
-                errors.append(f"[{label}] {path}: invalid JSONC — {exc}")
+    return errors
+
+
+def check_nextjs_provider_free(label: str, repo_type: str, files: dict) -> list:
+    """Keep provider provisioning out of generated Next.js content.
+
+    `.gitignore` intentionally retains local Vercel and Wrangler cache entries
+    for applications that later add their own deployment workflow.
+    """
+    if repo_type != "nextjs":
+        return []
+
+    rendered = "\n".join(
+        content for path, content in files.items() if path != ".gitignore"
+    ).lower()
+    errors = []
+    for term in ("vercel", "cloudflare", "wrangler", "deployments: write"):
+        if term in rendered:
+            errors.append(
+                f"[{label}] generated Next.js output still contains retired provider surface {term!r}"
+            )
+    if "wrangler.jsonc" in files:
+        errors.append(f"[{label}] generated Next.js output includes retired wrangler.jsonc")
+    gitignore = files.get(".gitignore", "")
+    for cache_path in (".vercel/", ".wrangler/"):
+        if cache_path not in gitignore:
+            errors.append(f"[{label}] .gitignore is missing local tool cache {cache_path!r}")
     return errors
 
 
@@ -616,22 +614,8 @@ EXPECTED_WORKFLOW_PERMISSIONS = {
 # the App token — a job-level grant here is exactly the kind of future
 # addition #11 was raised to stop from passing unexamined, the way the old
 # filename exemption let it.
-# deploy (Vercel only) / cloudflare-deploy (Cloudflare Workers only): each
-# posts a GitHub Deployment through GITHUB_TOKEN, a scope the surrounding
-# release-please.yml no longer grants at the workflow level now that the
-# release-please job itself doesn't need it. Required, not merely permitted —
-# each deploy job's `gh api .../deployments` call fails at runtime under the
-# {contents: read} it would otherwise inherit.
 EXPECTED_JOB_PERMISSIONS = {
     (".github/workflows/release-please.yml", "release-please"): None,
-    (".github/workflows/release-please.yml", "deploy"): {
-        "contents": "read",
-        "deployments": "write",
-    },
-    (".github/workflows/release-please.yml", "cloudflare-deploy"): {
-        "contents": "read",
-        "deployments": "write",
-    },
 }
 
 
@@ -655,9 +639,8 @@ def check_workflow_permissions(label: str, files: dict) -> list:
        to have: a job expected to hold `None` must declare no block, and a job
        expected to hold a map must declare exactly that map — declaring
        nothing when a map is expected is caught the same as declaring the
-       wrong map, closing the gap where simply deleting the Vercel deploy
-       job's permissions block passed silently (it would otherwise inherit
-       {contents: read} and fail at runtime on its Deployments API call).
+       wrong map, closing the gap where deleting a required permission block
+       passed silently and left a workflow to inherit an unsuitable default.
     4. A job outside that map that declares any permissions block is rejected
        outright as unexpected — an allowlist by (file, job), not a write/read
        heuristic that a new job-level grant could satisfy just by being
@@ -1381,36 +1364,6 @@ def run_self_tests() -> list:
     if not any("must grant exactly" in e for e in result):
         errors.append(f"self-test 'write-scoped observer' did not fail as expected: {result}")
 
-    # Case 29d: a Vercel-enabled render's deploy job legitimately holds
-    # {contents: read, deployments: write} and must not be flagged — a guard
-    # that fires on the one job that needs write is worse than no guard,
-    # because it trains people to weaken the check. This is also the positive
-    # confirmation that EXPECTED_JOB_PERMISSIONS covers the deploy job at all;
-    # every other case below proves it fires, this proves it doesn't
-    # over-fire.
-    files = bootstrap.generate_files(
-        next(
-            cfg for _, cfg in configurations()
-            if cfg["repo_type"] == "nextjs" and cfg["vercel"] and not cfg["cloudflare"]
-        )
-    )
-    result = check_workflow_permissions("self-test:vercel deploy job allowed", files)
-    if result:
-        errors.append(f"self-test 'vercel deploy job allowed' unexpectedly failed: {result}")
-
-    # Case 29d-cf: the Cloudflare-enabled render's deploy job legitimately
-    # holds the same {contents: read, deployments: write} and must not be
-    # flagged — the Cloudflare mirror of case 29d above.
-    files = bootstrap.generate_files(
-        next(
-            cfg for _, cfg in configurations()
-            if cfg["repo_type"] == "nextjs" and cfg["cloudflare"] and not cfg["vercel"]
-        )
-    )
-    result = check_workflow_permissions("self-test:cloudflare deploy job allowed", files)
-    if result:
-        errors.append(f"self-test 'cloudflare deploy job allowed' unexpectedly failed: {result}")
-
     # Case 29e: release-please.yml no longer needs GITHUB_TOKEN write — verified
     # empirically against a live release run (finding #11): PR creation, PR
     # merge, tag creation, and GitHub Release creation all succeeded under
@@ -1483,85 +1436,6 @@ def run_self_tests() -> list:
     if not any("must not declare its own permissions block" in e for e in result):
         errors.append(
             f"self-test 'release job null permissions' did not fail as expected: {result}"
-        )
-
-    # Case 29i: the deploy job's own map is asserted exactly too, not merely
-    # its presence — an accidental widening here would hand GITHUB_TOKEN a
-    # scope beyond the one deployment-status write it actually needs.
-    files = bootstrap.generate_files(
-        next(
-            cfg for _, cfg in configurations()
-            if cfg["repo_type"] == "nextjs" and cfg["vercel"] and not cfg["cloudflare"]
-        )
-    )
-    files[".github/workflows/release-please.yml"] = files[".github/workflows/release-please.yml"].replace(
-        "permissions:\n      contents: read\n      deployments: write",
-        "permissions:\n      contents: read\n      deployments: write\n      packages: write",
-        1,
-    )
-    result = check_workflow_permissions("self-test:deploy job widened", files)
-    if not any("must grant exactly" in e for e in result):
-        errors.append(f"self-test 'deploy job widened' did not fail as expected: {result}")
-
-    # Case 29i-cf: the Cloudflare mirror — its deploy job's permissions map
-    # must be asserted exactly too, not merely bounded.
-    files = bootstrap.generate_files(
-        next(
-            cfg for _, cfg in configurations()
-            if cfg["repo_type"] == "nextjs" and cfg["cloudflare"] and not cfg["vercel"]
-        )
-    )
-    files[".github/workflows/release-please.yml"] = files[".github/workflows/release-please.yml"].replace(
-        "permissions:\n      contents: read\n      deployments: write",
-        "permissions:\n      contents: read\n      deployments: write\n      packages: write",
-        1,
-    )
-    result = check_workflow_permissions("self-test:cloudflare deploy job widened", files)
-    if not any("must grant exactly" in e for e in result):
-        errors.append(f"self-test 'cloudflare deploy job widened' did not fail as expected: {result}")
-
-    # Case 29j: the deploy job's map is required, not merely bounded when
-    # present. Deleting its permissions block entirely must still fail — it
-    # would otherwise inherit the workflow-level {contents: read} and the
-    # deploy step's `gh api .../deployments` write would fail at runtime, a
-    # gap that is invisible to a check that only validates blocks a job
-    # happens to declare.
-    files = bootstrap.generate_files(
-        next(
-            cfg for _, cfg in configurations()
-            if cfg["repo_type"] == "nextjs" and cfg["vercel"] and not cfg["cloudflare"]
-        )
-    )
-    files[".github/workflows/release-please.yml"] = re.sub(
-        r"\n    permissions:\n      contents: read\n      deployments: write\n",
-        "\n",
-        files[".github/workflows/release-please.yml"],
-        count=1,
-    )
-    result = check_workflow_permissions("self-test:deploy job permissions removed", files)
-    if not any("declares no permissions block" in e for e in result):
-        errors.append(
-            f"self-test 'deploy job permissions removed' did not fail as expected: {result}"
-        )
-
-    # Case 29j-cf: the Cloudflare mirror of 29j — deleting its permissions
-    # block must fail too, not just the Vercel job's.
-    files = bootstrap.generate_files(
-        next(
-            cfg for _, cfg in configurations()
-            if cfg["repo_type"] == "nextjs" and cfg["cloudflare"] and not cfg["vercel"]
-        )
-    )
-    files[".github/workflows/release-please.yml"] = re.sub(
-        r"\n    permissions:\n      contents: read\n      deployments: write\n",
-        "\n",
-        files[".github/workflows/release-please.yml"],
-        count=1,
-    )
-    result = check_workflow_permissions("self-test:cloudflare deploy job permissions removed", files)
-    if not any("declares no permissions block" in e for e in result):
-        errors.append(
-            f"self-test 'cloudflare deploy job permissions removed' did not fail as expected: {result}"
         )
 
     # Case 30: `permissions: read-all` is valid GitHub syntax but not an
@@ -1683,29 +1557,6 @@ def run_self_tests() -> list:
     if "| Test scheme | `Sample App` |" not in spaced_readme:
         errors.append("self-test 'spaced scheme' leaked shell quoting into prose")
 
-    # Case 37: wrangler.jsonc is comment-bearing JSONC, not plain JSON, so
-    # check_syntax needs its own strip-then-parse path — prove it actually
-    # fires on a real syntax error rather than silently no-op'ing because the
-    # file's extension isn't ".json".
-    cloudflare_cfg = next(
-        cfg for _, cfg in configurations()
-        if cfg["repo_type"] == "nextjs" and cfg["cloudflare"]
-    )
-    files = bootstrap.generate_files(dict(cloudflare_cfg))
-    files["wrangler.jsonc"] = files["wrangler.jsonc"].replace('"workers_dev": true', '"workers_dev" true', 1)
-    result = check_syntax("self-test:broken wrangler.jsonc", files)
-    if not any("invalid JSONC" in e for e in result):
-        errors.append(f"self-test 'broken wrangler.jsonc' did not fail as expected: {result}")
-
-    # Case 38: the real, unmodified render must still parse clean — proof the
-    # comment-stripping doesn't itself corrupt valid JSONC.
-    result = check_syntax(
-        "self-test:valid wrangler.jsonc",
-        {"wrangler.jsonc": bootstrap.generate_files(dict(cloudflare_cfg))["wrangler.jsonc"]},
-    )
-    if result:
-        errors.append(f"self-test 'valid wrangler.jsonc' unexpectedly failed: {result}")
-
     return errors
 
 
@@ -1719,6 +1570,7 @@ def main() -> int:
         total += 1
         files = bootstrap.generate_files(cfg)
         all_errors += check_syntax(label, files)
+        all_errors += check_nextjs_provider_free(label, cfg["repo_type"], files)
         all_errors += check_markers(label, files)
         all_errors += check_agents_guidance(label, files)
         all_errors += check_workflow_job_consistency(label, cfg["repo_type"], files)

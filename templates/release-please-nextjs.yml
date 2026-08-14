@@ -1,11 +1,5 @@
 name: release-please
 
-# Job order: test -> release-please -> [deploy]
-# A tag and GitHub Release are only ever created for a commit that passes the
-# full suite. release-please authenticates as a GitHub App (not GITHUB_TOKEN)
-# so the release PR's commits and tags trigger other workflows normally.
-#
-# Requires: vars RELEASE_PLEASE_CLIENT_ID; secret RELEASE_PLEASE_APP_KEY.
 on:
   push:
     branches: [main]
@@ -19,23 +13,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Full suite only for the commit that is the Release Please PR merging
-  # (its title/commit message is the fixed "chore(main): release X.Y.Z"
-  # pattern release-please always uses). Every other push to main — an
-  # ordinary feature/Dependabot merge — already passed this same suite at
-  # PR time, so it gets the fast build/lint/typecheck/unit path only; it
-  # ships nothing and this run gates nothing real.
   test:
     uses: ./.github/workflows/test.yml
     with:
-      full: "${{ startsWith(github.event.head_commit.message, 'chore(main): release') }}"
+      full: "${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore(main): release') }}"
 
   release-please:
     needs: test
     runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -50,5 +35,3 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-# <<DEPLOY_JOB>>
-# <<CLOUDFLARE_DEPLOY_JOB>>

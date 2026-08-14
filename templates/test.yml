@@ -2,7 +2,7 @@ name: test
 
 # Reusable test suite (lint, format check, typecheck, unit tests, production
 # build, e2e). Called by ci.yml on PRs and by release-please.yml on pushes to
-# main, where it gates the release tag (and optional Vercel deploy).
+# main, where it gates the release tag.
 on:
   workflow_call:
     inputs:
