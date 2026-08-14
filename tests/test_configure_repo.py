@@ -60,11 +60,15 @@ class ConfigureRepoTests(unittest.TestCase):
 
     def test_nextjs_render_is_provider_free_and_preserves_postgres(self):
         files = bootstrap.generate_files({**self._config(), "name": "sample", "postgres": True})
-        rendered = "\n".join(files.values()).lower()
+        rendered = "\n".join(
+            content for path, content in files.items() if path != ".gitignore"
+        ).lower()
         self.assertNotIn("vercel", rendered)
         self.assertNotIn("cloudflare", rendered)
         self.assertNotIn("wrangler", rendered)
         self.assertNotIn("wrangler.jsonc", files)
+        self.assertIn(".vercel/", files[".gitignore"])
+        self.assertIn(".wrangler/", files[".gitignore"])
         self.assertIn("postgres", files[".github/workflows/test.yml"].lower())
         self.assertNotIn("deployments: write", files[".github/workflows/release-please.yml"])
 
@@ -89,10 +93,11 @@ class ConfigureRepoTests(unittest.TestCase):
         self.assertFalse({"vercel", "cloudflare", "vercel_token", "cloudflare_api_token"} & config.keys())
 
     def test_retired_provider_flags_are_rejected(self):
-        with patch.object(sys, "argv", ["bootstrap.py", "--vercel"]):
-            with self.assertRaises(SystemExit) as error:
-                bootstrap.parse_args()
-        self.assertEqual(error.exception.code, 2)
+        for flag in ("--vercel", "--no-vercel", "--cloudflare", "--no-cloudflare"):
+            with self.subTest(flag=flag), patch.object(sys, "argv", ["bootstrap.py", flag]):
+                with self.assertRaises(SystemExit) as error:
+                    bootstrap.parse_args()
+            self.assertEqual(error.exception.code, 2)
 
 
 if __name__ == "__main__":

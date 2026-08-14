@@ -216,11 +216,17 @@ def check_syntax(label: str, files: dict) -> list:
 
 
 def check_nextjs_provider_free(label: str, repo_type: str, files: dict) -> list:
-    """Keep provider provisioning out of all generated Next.js output."""
+    """Keep provider provisioning out of generated Next.js content.
+
+    `.gitignore` intentionally retains local Vercel and Wrangler cache entries
+    for applications that later add their own deployment workflow.
+    """
     if repo_type != "nextjs":
         return []
 
-    rendered = "\n".join(files.values()).lower()
+    rendered = "\n".join(
+        content for path, content in files.items() if path != ".gitignore"
+    ).lower()
     errors = []
     for term in ("vercel", "cloudflare", "wrangler", "deployments: write"):
         if term in rendered:
@@ -229,6 +235,10 @@ def check_nextjs_provider_free(label: str, repo_type: str, files: dict) -> list:
             )
     if "wrangler.jsonc" in files:
         errors.append(f"[{label}] generated Next.js output includes retired wrangler.jsonc")
+    gitignore = files.get(".gitignore", "")
+    for cache_path in (".vercel/", ".wrangler/"):
+        if cache_path not in gitignore:
+            errors.append(f"[{label}] .gitignore is missing local tool cache {cache_path!r}")
     return errors
 
 
