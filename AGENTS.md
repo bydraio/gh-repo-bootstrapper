@@ -134,6 +134,7 @@ not an exhaustive list — a new tool needs no change to this rule:
 - **Antigravity CLI** —
   `Co-Authored-By: Antigravity CLI (<model-name>) <224641728+gemini-cli-robot@users.noreply.github.com>`
 - **OpenCode** — `Co-Authored-By: OpenCode (<model-name>) <noreply@opencode.ai>`
+- **OMP** — `Co-Authored-By: OMP (<model-name>) <noreply@omp.sh>`
 
 Keep the trailer in every applicable commit. Do not duplicate it in the PR
 body or add an AI-generated footer there.
