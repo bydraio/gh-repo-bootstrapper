@@ -2,16 +2,15 @@
 
 ## Reporting a vulnerability
 
-Please report security issues through GitHub's private vulnerability reporting:
-open the repository's **Security** tab and choose **Report a vulnerability**.
-That keeps the report private until a fix is available. Please don't open a
-public issue for anything exploitable.
+GitHub private vulnerability reporting is the sole security channel for this
+repository. Open the repository's **Security** tab and choose **Report a
+vulnerability**. Do not open a public issue for anything exploitable or for
+information that would make exploitation easier.
 
-A proof of concept in a private advisory is welcome — it is the one exception to
-the "no code in issues" rule in [CONTRIBUTING.md](CONTRIBUTING.md). It is used to
-**reproduce and confirm** the report; it will not be merged, and neither will a
-suggested patch. Remediation is implemented independently, consistent with the
-contribution policy. Reporters are credited in the advisory and release notes.
+A proof of concept may be included in the private advisory when it is needed
+to reproduce and confirm the report. It will not be merged, and neither will a
+suggested patch; remediation is implemented independently under the policy in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Scope
 

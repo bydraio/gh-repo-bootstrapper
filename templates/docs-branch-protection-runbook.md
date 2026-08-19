@@ -1,9 +1,25 @@
 # Branch protection and release PRs — operational runbook
 
-`main` is protected: specific status checks are required, a pull request is required, and the rules
-bind admins too. This file records the operational facts that matter when a PR — usually a release
-PR — is blocked and the reason is not obvious. Every fact here was established from a real incident,
-not from documentation. Dates refer to late July 2026.
+`main` is protected: a pull request and specific status checks are required, and the rules bind
+admins too. This runbook records proven operational behaviour when a PR — usually a release PR —
+is blocked and the reason is not obvious. It does not replace the live branch-protection rule:
+required checks, their App IDs, and other policy options must be queried for the repository at hand.
+
+## Before relying on protection or Release Please
+
+Confirm the protected branch requires pull requests, requires only checks that the current CI
+actually reports, and applies to administrators. Do not copy a check list from another repository:
+verify the complete live rule, including required check App IDs, then prove it with a real pull
+request whose current merge result reports every required check.
+
+Release Please uses a short-lived token minted from this repository's GitHub App, not the default
+`GITHUB_TOKEN`. The operator must configure repository variable `RELEASE_PLEASE_CLIENT_ID` and
+secret `RELEASE_PLEASE_APP_KEY`; never place either value in source, logs, issue forms, or pull
+requests. The workflow's default permission is intentionally `contents: read`; the minted App token
+is supplied to Release Please so its release PR can trigger the normal pull-request workflows.
+
+Before treating release automation as operational, verify that its first run creates or updates a
+release PR and that the required checks are reported on that PR.
 
 ## 1. A release PR whose base has advanced carries checks describing a superseded tree
 
@@ -77,25 +93,30 @@ GitHub computes mergeability from the **latest result per check name**. A rollup
 assumed: a PR whose `test / build` had failed twice historically computed CLEAN once the current run
 passed.
 
-## 6. The escape hatch is to disable protection deliberately — never to weaken the check set
+## 6. A stuck PR is a pause state, not authority to weaken protection
 
 With `enforce_admins: true`, nobody — including the operator — can merge a PR whose required checks
-are not green. When a PR is genuinely stuck (for example a stale-tree block that update-branch did
-not clear), the deliberate remedy is:
+are not green. Diagnose the merge ref, use the update-branch endpoint only when authorized, and
+repair or retrigger the workflow through its supported mechanism. Never drop an individual required
+context, use an admin bypass, or disable protection autonomously to force a merge.
 
-1. Remove branch protection on `main`.
-2. Merge or repair the PR.
-3. Re-apply protection immediately, with the same contexts.
+If the policy itself appears to be the final blocker after materially distinct remediation attempts,
+pause for explicit operator authorization. Any operator-approved temporary protection change must:
 
-Under pressure the tempting move is to drop a context from the required set "just for this PR". Do
-not: a dropped context is invisible the moment the pressure is forgotten, and it converts a one-PR
-problem into a permanent fleet-wide hole. Toggling protection off and on is an audible, bounded act;
-a weakened check set is neither.
+1. capture the complete live rule and an exact restoration payload first;
+2. identify the single PR and reason for the exception;
+3. preserve an audit record of the before state, mutation, merge or repair, and after state;
+4. restore protection immediately; and
+5. independently re-query and diff the complete rule, including required check App IDs.
+
+The preferred resolution is always to make the protected path work. A temporary policy change is an
+exceptional recovery action, not the normal release procedure.
 
 ## Quick inspection commands
 
 ```sh
 gh pr view <n> --repo <owner>/<repo> --json mergeable,mergeStateStatus,statusCheckRollup
+gh pr checks <n> --repo <owner>/<repo>
 gh api repos/<owner>/<repo>/branches/main/protection
 gh api repos/<owner>/<repo>/pulls/<n>/update-branch -X PUT   # the deterministic stale-tree lever
 ```
