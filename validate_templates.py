@@ -60,6 +60,12 @@ import bootstrap
 
 MARKER_RE = re.compile(r"__[A-Z_]+__|# <<[A-Z_]+>>")
 NPM_SCRIPT_RE = re.compile(r"\bnpm\s+run\s+([A-Za-z0-9:_-]+)|\bnpm\s+test\b")
+# An optional script may be documented without making it a generated-scaffold
+# contract. Keep the phrase deliberately exact so other npm commands remain
+# validated against bootstrap.ASSUMED_NPM_SCRIPTS.
+OPTIONAL_NPM_SCRIPT_RE = re.compile(
+    r"\bnpm\s+run\s+([A-Za-z0-9:_-]+)`\s+when that\s+script is available\b"
+)
 COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RELEASE_FULL_SUITE_EXPRESSION = (
     "${{ github.event_name == 'workflow_dispatch' || "
@@ -386,11 +392,16 @@ def check_screenshot_guidance(label: str, repo_type: str, files: dict) -> list:
 
 
 def _template_npm_scripts(templates: dict) -> dict:
-    """Map each documented npm script to the template paths that reference it."""
+    """Map required documented npm scripts to the template paths that reference them."""
     scripts = {}
     for path, content in templates.items():
+        optional_script_spans = {
+            match.span(1) for match in OPTIONAL_NPM_SCRIPT_RE.finditer(content)
+        }
         for match in NPM_SCRIPT_RE.finditer(content):
             script = match.group(1) or "test"
+            if match.group(1) and match.span(1) in optional_script_spans:
+                continue
             scripts.setdefault(script, set()).add(path)
     return scripts
 
@@ -1195,7 +1206,16 @@ def run_self_tests() -> list:
     if not any("never documented" in e for e in result):
         errors.append(f"self-test 'unused npm assumption' did not fail as expected: {result}")
 
-    # Case 6: shared agent guidance applies to every generated repository type,
+    # Case 6: an explicitly optional local workaround must not become a
+    # generated-scaffold script contract.
+    result = check_npm_script_assumptions(
+        {"AGENTS-nextjs-tooling.md": "npm run test:e2e:local` when that script is available"},
+        set(),
+    )
+    if result:
+        errors.append(f"self-test 'optional npm script' unexpectedly failed: {result}")
+
+    # Case 7: shared agent guidance applies to every generated repository type,
     # not only the Next.js configuration that has baseline guidance.
     files = bootstrap.generate_files(
         next(cfg for _, cfg in configurations() if cfg["repo_type"] == "python")
