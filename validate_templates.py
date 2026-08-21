@@ -60,11 +60,12 @@ import bootstrap
 
 MARKER_RE = re.compile(r"__[A-Z_]+__|# <<[A-Z_]+>>")
 NPM_SCRIPT_RE = re.compile(r"\bnpm\s+run\s+([A-Za-z0-9:_-]+)|\bnpm\s+test\b")
-# An optional script may be documented without making it a generated-scaffold
-# contract. Keep the phrase deliberately exact so other npm commands remain
-# validated against bootstrap.ASSUMED_NPM_SCRIPTS.
+# The optional local E2E helper may be documented without making it a
+# generated-scaffold contract. Keep the script name and phrase deliberately
+# exact so other npm commands remain validated against
+# bootstrap.ASSUMED_NPM_SCRIPTS.
 OPTIONAL_NPM_SCRIPT_RE = re.compile(
-    r"\bnpm\s+run\s+([A-Za-z0-9:_-]+)`\s+when that\s+script is available\b"
+    r"\bnpm\s+run\s+(test:e2e:local)`\s+when that\s+script is available\b"
 )
 COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 RELEASE_FULL_SUITE_EXPRESSION = (
@@ -1215,7 +1216,15 @@ def run_self_tests() -> list:
     if result:
         errors.append(f"self-test 'optional npm script' unexpectedly failed: {result}")
 
-    # Case 7: shared agent guidance applies to every generated repository type,
+    # Case 7: optional wording must not exempt another undeclared script.
+    result = check_npm_script_assumptions(
+        {"AGENTS-nextjs-tooling.md": "npm run invented` when that script is available"},
+        set(),
+    )
+    if not any("not declared" in e for e in result):
+        errors.append(f"self-test 'optional script exemption' did not fail: {result}")
+
+    # Case 8: shared agent guidance applies to every generated repository type,
     # not only the Next.js configuration that has baseline guidance.
     files = bootstrap.generate_files(
         next(cfg for _, cfg in configurations() if cfg["repo_type"] == "python")
