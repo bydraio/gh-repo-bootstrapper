@@ -58,7 +58,7 @@ DerivedData/
 *.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
 *.xcodeproj/project.xcworkspace/
 *.xcodeproj/xcuserdata/
-*.xcodeproj/xcshareddata/xcschemes/
+*.xcodeproj/xcshareddata/xcschemes/*
 !*.xcodeproj/xcshareddata/xcschemes/*.xcscheme
 *.p12
 *.provisionprofile
