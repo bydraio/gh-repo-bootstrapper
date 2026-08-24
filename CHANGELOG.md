@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/bydraio/gh-repo-bootstrapper/compare/v0.3.0...v0.3.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* **gitignore:** correct xcscheme re-inclusion pattern ([f0e6eac](https://github.com/bydraio/gh-repo-bootstrapper/commit/f0e6eac8a2f87e6a70240f8f35f8a9de983a003e))
+* **nextjs:** document macOS dev limits ([#16](https://github.com/bydraio/gh-repo-bootstrapper/issues/16)) ([f44a524](https://github.com/bydraio/gh-repo-bootstrapper/commit/f44a524696c04ab25da415da5bce61a0d8e2445d))
+
 ## [0.3.0](https://github.com/bydraio/gh-repo-bootstrapper/compare/v0.2.0...v0.3.0) (2026-08-14)
 
 
