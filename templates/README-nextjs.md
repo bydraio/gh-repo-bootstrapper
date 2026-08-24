@@ -24,6 +24,17 @@ npm ci
 npm run dev
 ```
 
+On macOS, use a temporary per-shell descriptor limit before starting a Next.js
+development server to avoid Watchpack `EMFILE` failures:
+
+```sh
+ulimit -n 10240 && npm run dev
+```
+
+Do not add this setting to a shell profile or make a persistent system-limit
+change. Browser-test commands, ports, and server lifecycle are application
+specific; document them with the application scaffold.
+
 ## Verification
 
 Once the application scaffold is in place, install Chromium once per machine,
