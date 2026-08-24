@@ -10,14 +10,28 @@ browser-test command; do not weaken agent-wide sandbox or host-execution policy.
 If elevation is unavailable or denied, report the constraint and use equivalent
 hosted CI evidence where available.
 
-If Next.js or Watchpack reports `EMFILE: too many open files, watch`, treat it
-as local host resource exhaustion. First run `npm run test:e2e:local` when that
-script is available. Otherwise, run the project's normal Playwright suite with
-one worker, for example `npx playwright test --workers=1`. Do not replace the
-default E2E command, disable parallel CI, reduce test coverage, or alter
+On macOS, use a temporary per-shell descriptor limit when starting a local
+Next.js development server:
+
+```sh
+ulimit -n 10240 && npm run dev
+```
+
+This is a non-persistent per-shell setting. Do not add it to shell profiles,
+change system limits, change CI, or alter Playwright configuration. A generated
+repository owns its server lifecycle, ports, and test scripts, so follow its
+local documentation before combining a manual dev server with browser tests.
+If Next.js or Watchpack still reports `EMFILE: too many open files, watch`,
+treat it as local host resource exhaustion. Run `npm run test:e2e:local` when that script is available.
+Otherwise, run the project's normal Playwright suite with one worker, for
+example `npx playwright test --workers=1`. Do not replace the default E2E
+command, disable parallel CI, reduce test coverage, or alter
 `playwright.config.ts` merely to accommodate a constrained host. Before
 retrying, inspect any existing local listeners on the E2E ports; do not
-terminate processes you cannot identify.
+terminate processes you cannot identify. If the raised limit does not resolve
+the failure, preserve the exact output and, if present,
+`.next/dev/logs/next-development.log` rather than claiming browser validation
+passed.
 
 Do not make persistent OS file-limit, watcher, or global sandbox-policy changes
 solely to resolve a local validation failure. If the serial command still fails,
