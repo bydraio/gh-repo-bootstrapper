@@ -86,6 +86,16 @@ These are different states and only one of them is safe:
   have required checks until its release automation uses the GitHub App token shape. Check who
   authored the release PR and whether its rollup is empty before requiring checks on a repository.
 
+### Status check context naming for reusable workflows
+
+For workflows that invoke a reusable workflow (such as `ci.yml` or `release-please.yml` calling `test.yml`), GitHub formats the status check context name using the convention:
+
+```
+{caller job} / {reusable job}
+```
+
+For instance, when `ci.yml` defines the caller job `test:` and invokes reusable jobs `build:` and `e2e:` in `test.yml`, GitHub registers the check contexts as `test / build` and `test / e2e` (and `test / e2e-prod` if configured). Required status checks configured in GitHub branch protection must match this exact `{caller job} / {reusable job}` string rather than the standalone job name within `test.yml`.
+
 ## 5. Historical failures in a check rollup do not block
 
 GitHub computes mergeability from the **latest result per check name**. A rollup listing an old
