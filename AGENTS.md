@@ -119,9 +119,9 @@ Follow [Conventional Commits](https://www.conventionalcommits.org):
 `perf`, `test`, `build`, `ci`, `revert`. Scope optional; subject lowercase,
 imperative, no trailing period.
 
-**AI co-authors** — every commit materially created or modified with AI
-assistance must include a `Co-Authored-By:` trailer in the commit message.
-Never put this trailer in the PR body. The form is
+**AI co-authors & PR footers** — every commit materially created or modified
+with AI assistance must include a `Co-Authored-By:` trailer in the git commit
+message. The form is
 `Co-Authored-By: <Tool> (<model-name>) <tool-noreply-address>`, where
 `<Tool>` is the tool's name — not a persona or agent nickname — and
 `<model-name>` is substituted dynamically with the model actually running
@@ -136,8 +136,15 @@ not an exhaustive list — a new tool needs no change to this rule:
 - **OpenCode** — `Co-Authored-By: OpenCode (<model-name>) <noreply@opencode.ai>`
 - **OMP** — `Co-Authored-By: OMP (<model-name>) <noreply@omp.sh>`
 
-Keep the trailer in every applicable commit. Do not duplicate it in the PR
-body or add an AI-generated footer there.
+Keep the `Co-Authored-By:` git trailer in every applicable commit; do not use
+the commit trailer format in pull request descriptions. Instead, when the AI
+harness CLI creates or updates a pull request, append a human-readable footer
+at the bottom of the PR description, separated by a horizontal rule (`---`):
+
+```markdown
+---
+*Prepared with the assistance of <Tool> (<model-name>).*
+```
 
 ## Pull requests (squash-merge + Release Please)
 
@@ -168,7 +175,13 @@ merge-ready:
 - **Squash merges** — ensure the final squash commit message retains all
   applicable `Co-Authored-By:` trailers. When using `gh pr merge --squash`, pass
   the trailers in the squash commit body via `--body`; do not pass an empty
-  body. Verify the resulting commit message after merging.
+  body. For example:
+  ```sh
+  gh pr merge <n> --squash --delete-branch --body "Co-Authored-By: Antigravity CLI (Gemini 3.8 Flash (High)) <224641728+gemini-cli-robot@users.noreply.github.com>"
+  ```
+  If multiple co-authors or manual commits are squashed, include each applicable
+  `Co-Authored-By:` trailer separated by newlines. Verify the resulting commit
+  message after merging.
 
 ### Release Please pull requests
 
@@ -218,9 +231,10 @@ unrun checks passed.
 
 ## Tooling
 
-Run both checks before pushing:
+Run checks before pushing:
 
 ```sh
-python3 validate_templates.py
+uv run --with pyyaml python3 validate_templates.py
+uv run --with pytest --with pyyaml python3 -m pytest
 node --test templates/*.test.mjs
 ```
