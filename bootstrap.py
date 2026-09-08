@@ -696,6 +696,15 @@ def generate_files(cfg: dict) -> dict:
         "SCREENSHOT_GUIDANCE",
         _load(f"AGENTS-{repo_type}-screenshot-link.md") if repo_type in ("nextjs", "swift") else "",
     )
+    agents = _compose(
+        agents,
+        "SCREENSHOT_REVIEW_REF",
+        _load(
+            "AGENTS-screenshot-review-ref-linked.md"
+            if repo_type in ("nextjs", "swift")
+            else "AGENTS-screenshot-review-ref-generic.md"
+        ),
+    )
     files["AGENTS.md"] = agents
     files[".gitignore"] = _load(".gitignore")
     if repo_type == "swift" and xcodegen:
