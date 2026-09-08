@@ -1,4 +1,3 @@
 # Trusted-repository template validation.
 
-prefix_rule(pattern = ["node", "--test"], decision = "allow", justification = "Run this trusted repository's Node test files.")
 prefix_rule(pattern = ["python3", "validate_templates.py"], decision = "allow", justification = "Render and validate every supported bootstrapper configuration.")
