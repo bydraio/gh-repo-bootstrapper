@@ -9,15 +9,28 @@ const reviewWindowDays = 30;
 const releaseStaleDays = 14;
 const apiBase = process.env.GITHUB_API_URL ?? "https://api.github.com";
 
+// Math.ceil() of a small negative fraction returns -0 (per spec, for
+// -1 < x < 0), and -0 < 0 is false — so "less than a day past due" must be
+// classified with <= 0, not < 0, or it's silently treated as not-yet-due.
+function daysUntil(date) {
+  return Math.ceil((date.valueOf() - now.valueOf()) / 86_400_000);
+}
+
+function reviewUrgency(daysRemaining, windowDays) {
+  if (daysRemaining <= 0) return "past";
+  if (daysRemaining <= windowDays) return "upcoming";
+  return "ok";
+}
+
 function linesForReviewDates(rows, describe) {
   const upcoming = [];
   const past = [];
   for (const row of rows) {
     const reviewAt = new Date(`${row.reviewDate}T00:00:00.000Z`);
-    const daysUntilReview = Math.ceil((reviewAt.valueOf() - now.valueOf()) / 86_400_000);
     const description = describe(row);
-    if (daysUntilReview < 0) past.push(description);
-    else if (daysUntilReview <= reviewWindowDays) upcoming.push(description);
+    const urgency = reviewUrgency(daysUntil(reviewAt), reviewWindowDays);
+    if (urgency === "past") past.push(description);
+    else if (urgency === "upcoming") upcoming.push(description);
   }
   return { past, upcoming };
 }
