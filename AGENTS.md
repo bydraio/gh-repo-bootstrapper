@@ -261,9 +261,10 @@ regenerated assets until the required visual and privacy review has passed.
 ## Preservation and destructive operations
 
 Preserve existing user work and unrelated repository changes. Do not discard,
-reset, overwrite, or destructively clean existing work unless the user's
-request explicitly requires it and the consequences are understood. Prefer
-reversible operations when they satisfy the task equally well.
+reset, overwrite, destructively clean, or otherwise destroy existing work
+unless the user's request explicitly requires it and the consequences are
+understood. Prefer reversible operations when they satisfy the task equally
+well.
 
 ## Definition of done
 
