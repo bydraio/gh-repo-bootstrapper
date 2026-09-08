@@ -238,8 +238,10 @@ Release Please PRs are bot-generated release artifacts, not standard PRs.
 
 ## When instructions and reality disagree
 
-Flag the gap instead of silently diverging. If a guardrail blocks a genuinely
-better approach, raise it with the operator rather than working around it.
+Where this file describes the repository inaccurately, reality wins — but flag
+the gap instead of silently diverging. Guardrails are not descriptions: if one
+blocks a genuinely better approach, raise it with the operator rather than
+working around it.
 
 For user-facing changes, verify the rendered or running product in addition to
 automated checks; tests alone do not establish visual or interaction quality.

@@ -243,13 +243,16 @@ Release Please PRs are bot-generated release artifacts, not standard PRs.
 
 ## When instructions and reality disagree
 
-Flag the gap instead of silently diverging. If a guardrail blocks a genuinely
-better approach, raise it with the operator rather than working around it.
+Where this file describes the repository inaccurately, reality wins — but flag
+the gap instead of silently diverging. Guardrails are not descriptions: if one
+blocks a genuinely better approach, raise it with the operator rather than
+working around it.
 
 For user-facing changes, verify the rendered or running product in addition to
 automated checks; tests alone do not establish visual or interaction quality.
 
-For changes affecting tracked screenshots or captured views, follow the
+**Treat screenshot generation and visual approval as separate gates.** For
+changes affecting tracked screenshots or captured views, follow the
 repository's documented screenshot-review process when present. A successful
 screenshot-generation workflow means only that artifacts were produced; it is
 not visual approval. Never capture live or private data, and do not commit
