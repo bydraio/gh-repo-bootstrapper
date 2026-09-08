@@ -273,6 +273,18 @@ test("reports overdue lint review dates as actionable", async () => {
   assert.match(output, /Baseline review completed/);
 });
 
+test("reports a lint review due today as overdue, not upcoming", async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const { code, output } = await runFixture({
+    rows: [documented],
+    lintRows: [`| 1 | \`no-console\` | \`e2e/fixture.mjs\` | accepted | ${today} |`],
+    alerts: matchingAlert,
+  });
+  assert.equal(code, 1);
+  assert.match(output, /Overdue lint reviews/);
+  assert.doesNotMatch(output, /Lint reviews due within 30 days/);
+});
+
 test("reports upcoming lint review dates as informational", async () => {
   const upcomingDate = new Date(Date.now() + 15 * 86_400_000).toISOString().slice(0, 10);
   const { code, output } = await runFixture({
