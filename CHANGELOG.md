@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/bydraio/gh-repo-bootstrapper/compare/v0.3.1...v0.4.0) (2026-09-08)
+
+
+### Features
+
+* **templates:** resolve the screenshot-review reference per repo type ([#23](https://github.com/bydraio/gh-repo-bootstrapper/issues/23)) ([9e4ce2d](https://github.com/bydraio/gh-repo-bootstrapper/commit/9e4ce2d8e0cb63ce629bad8007c5bc9263d252be))
+
+
+### Bug Fixes
+
+* **scripts:** classify a review due today as overdue, not upcoming ([#25](https://github.com/bydraio/gh-repo-bootstrapper/issues/25)) ([e92bb9b](https://github.com/bydraio/gh-repo-bootstrapper/commit/e92bb9bf401cc44fa314032bfbbc549b580aa777))
+
 ## [0.3.1](https://github.com/bydraio/gh-repo-bootstrapper/compare/v0.3.0...v0.3.1) (2026-08-24)
 
 
