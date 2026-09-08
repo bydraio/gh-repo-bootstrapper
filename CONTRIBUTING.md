@@ -7,9 +7,10 @@ issue — that is the way to contribute to this project, and it is a real one.
 
 **External code contributions are not accepted.** Pull requests, patches,
 diffs, and code snippets offered for inclusion will be closed unmerged. This is
-not a judgement on the quality of the work, and it is not personal. Pull request
-creation is restricted to collaborators at the repository level, so in most
-cases you will not be able to open one at all.
+not a judgement on the quality of the work, and it is not personal. GitHub
+provides no way to prevent pull requests being opened on a public repository,
+so please read this as a request rather than a barrier: an unsolicited pull
+request costs you real effort and will still be closed unmerged.
 
 The reason is provenance. This project is maintained by one person and has no
 contributor licence agreement in place. Note what this is *not* about: an
