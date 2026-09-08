@@ -238,8 +238,10 @@ Release Please PRs are bot-generated release artifacts, not standard PRs.
 
 ## When instructions and reality disagree
 
-Flag the gap instead of silently diverging. If a guardrail blocks a genuinely
-better approach, raise it with the operator rather than working around it.
+Where this file describes the repository inaccurately, reality wins — but flag
+the gap instead of silently diverging. Guardrails are not descriptions: if one
+blocks a genuinely better approach, raise it with the operator rather than
+working around it.
 
 For user-facing changes, verify the rendered or running product in addition to
 automated checks; tests alone do not establish visual or interaction quality.
@@ -249,9 +251,10 @@ automated checks; tests alone do not establish visual or interaction quality.
 ## Preservation and destructive operations
 
 Preserve existing user work and unrelated repository changes. Do not discard,
-reset, overwrite, or destructively clean existing work unless the user's
-request explicitly requires it and the consequences are understood. Prefer
-reversible operations when they satisfy the task equally well.
+reset, overwrite, destructively clean, or otherwise destroy existing work
+unless the user's request explicitly requires it and the consequences are
+understood. Prefer reversible operations when they satisfy the task equally
+well.
 
 ## Definition of done
 
